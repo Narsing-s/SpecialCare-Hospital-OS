@@ -1,1 +1,1 @@
-{"name":"@specialcare/api","private":true,"scripts":{"dev":"tsx watch src/server.ts","build":"tsc","start":"node dist/server.js"},"dependencies":{"fastify":"latest"},"devDependencies":{"tsx":"latest","typescript":"latest","@types/node":"latest"}}
+{"name":"@specialcare/api","private":true,"scripts":{"dev":"tsx watch src/server.ts","build":"tsc","start":"node dist/server.js"},"dependencies":{"@prisma/client":"6.19.3","fastify":"5.6.0","@fastify/cors":"11.1.0"},"devDependencies":{"prisma":"6.19.3","tsx":"4.20.6","typescript":"5.9.2","@types/node":"24.3.0"}}
