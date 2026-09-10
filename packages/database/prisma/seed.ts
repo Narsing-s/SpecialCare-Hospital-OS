@@ -18,7 +18,7 @@ async function main() {
         const ward = await prisma.ward.upsert({ where: { id: `seed-ward-${b}-${f}-${w}` }, update: { name: wardNames[w] }, create: { id: `seed-ward-${b}-${f}-${w}`, name: wardNames[w], floorId: floor.id } });
         for (let r = 1; r <= 4; r++) {
           const room = await prisma.room.upsert({ where: { wardId_number: { wardId: ward.id, number: `${f}${String(w + 1).padStart(2, "0")}-${String(r).padStart(2, "02")}` } }, update: {}, create: { number: `${f}${String(w + 1).padStart(2, "0")}-${String(r).padStart(2, "02")}`, name: `${wardNames[w]} Room ${r}`, hospitalId: hospital.id, campusId: campus.id, buildingId: building.id, floorId: floor.id, wardId: ward.id } });
-          for (let bed = 1; bed <= 2; bed++) {
+          for (let bed = 1; bed <= 4; bed++) {
             await prisma.bed.upsert({ where: { wardId_number: { wardId: ward.id, number: `B${String(bedNumber).padStart(4, "0")}` } }, update: { roomId: room.id }, create: { wardId: ward.id, roomId: room.id, number: `B${String(bedNumber).padStart(4, "0")}` } });
             bedNumber++;
           }
