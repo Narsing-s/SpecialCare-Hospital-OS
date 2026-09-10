@@ -6,26 +6,35 @@ const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
 
+async function hospitalIdFor(input?: string) {
+  if (input) return input;
+  const existing = await prisma.hospital.findFirst({ orderBy: { createdAt: "asc" } });
+  if (existing) return existing.id;
+  const hospital = await prisma.hospital.create({ data: { name: "SpecialCare Medical Center", code: "SCMC" } });
+  return hospital.id;
+}
 function mrn() { return `SC-${Date.now().toString().slice(-8)}`; }
 
-app.get("/health", async () => ({ status: "ok", service: "SpecialCare Hospital API", version: "0.3.0" }));
+app.get("/health", async () => ({ status: "ok", service: "SpecialCare Hospital API", version: "0.4.0" }));
 
 app.get("/api/v1/dashboard/summary", async () => ({
   beds: { total: await prisma.bed.count(), occupied: await prisma.bed.count({ where: { status: "OCCUPIED" } }), available: await prisma.bed.count({ where: { status: "AVAILABLE" } }) },
   patients: { total: await prisma.patient.count() },
-  admissions: { active: await prisma.admission.count({ where: { status: "ACTIVE" } }) }
+  admissions: { active: await prisma.admission.count({ where: { status: "ACTIVE" } }) },
+  emergency: { activePatients: 0 }, lab: { pendingReports: 0 }
 }));
 
 app.get("/api/v1/patients", async (request) => {
   const q = (request.query as { search?: string }).search?.trim();
-  const data = await prisma.patient.findMany({ where: q ? { OR: [{ mrn: { contains: q, mode: "insensitive" } }, { firstName: { contains: q, mode: "insensitive" } }, { lastName: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }] } : undefined, orderBy: { createdAt: "desc" }, take: 100 });
+  const data = await prisma.patient.findMany({ where: q ? { OR: [{ mrn: { contains: q, mode: "insensitive" } }, { firstName: { contains: q, mode: "insensitive" } }, { lastName: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }] } : undefined, include: { admissions: { where: { status: "ACTIVE" }, include: { bed: { include: { ward: true } } }, take: 1 } }, orderBy: { createdAt: "desc" }, take: 100 });
   return { data };
 });
 
 app.post("/api/v1/patients", async (request, reply) => {
   const body = request.body as { firstName?: string; lastName?: string; dateOfBirth?: string; phone?: string; email?: string; hospitalId?: string };
-  if (!body.firstName?.trim() || !body.lastName?.trim() || !body.hospitalId) return reply.code(400).send({ error: "firstName, lastName and hospitalId are required" });
-  const patient = await prisma.patient.create({ data: { mrn: mrn(), firstName: body.firstName.trim(), lastName: body.lastName.trim(), dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : undefined, phone: body.phone?.trim() || undefined, email: body.email?.trim() || undefined, hospitalId: body.hospitalId } });
+  if (!body.firstName?.trim() || !body.lastName?.trim()) return reply.code(400).send({ error: "firstName and lastName are required" });
+  const hospitalId = await hospitalIdFor(body.hospitalId);
+  const patient = await prisma.patient.create({ data: { mrn: mrn(), firstName: body.firstName.trim(), lastName: body.lastName.trim(), dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : undefined, phone: body.phone?.trim() || undefined, email: body.email?.trim() || undefined, hospitalId } });
   return reply.code(201).send(patient);
 });
 
@@ -36,20 +45,23 @@ app.get("/api/v1/patients/:id", async (request, reply) => {
   return patient;
 });
 
-app.get("/api/v1/beds", async () => ({ total: await prisma.bed.count(), available: await prisma.bed.count({ where: { status: "AVAILABLE" } }), occupied: await prisma.bed.count({ where: { status: "OCCUPIED" } }), beds: await prisma.bed.findMany({ include: { ward: true }, orderBy: [{ wardId: "asc" }, { number: "asc" }] }) }));
+app.get("/api/v1/beds", async () => ({ data: await prisma.bed.findMany({ where: { status: "AVAILABLE" }, include: { ward: true }, orderBy: [{ wardId: "asc" }, { number: "asc" }] }), counts: { total: await prisma.bed.count(), available: await prisma.bed.count({ where: { status: "AVAILABLE" } }), occupied: await prisma.bed.count({ where: { status: "OCCUPIED" } }) } }));
 
 app.post("/api/v1/admissions", async (request, reply) => {
   const body = request.body as { patientId?: string; bedId?: string };
   if (!body.patientId || !body.bedId) return reply.code(400).send({ error: "patientId and bedId are required" });
-  const result = await prisma.$transaction(async tx => {
-    const bed = await tx.bed.findUnique({ where: { id: body.bedId } });
-    if (!bed || bed.status !== "AVAILABLE") throw new Error("BED_NOT_AVAILABLE");
-    const admission = await tx.admission.create({ data: { patientId: body.patientId!, bedId: body.bedId! } });
-    await tx.bed.update({ where: { id: body.bedId! }, data: { status: "OCCUPIED" } });
-    return admission;
-  }).catch(e => e.message === "BED_NOT_AVAILABLE" ? null : Promise.reject(e));
-  if (!result) return reply.code(409).send({ error: "Bed is not available" });
-  return reply.code(201).send(result);
+  try {
+    const result = await prisma.$transaction(async tx => {
+      const bed = await tx.bed.findUnique({ where: { id: body.bedId } });
+      if (!bed || bed.status !== "AVAILABLE") throw new Error("BED_NOT_AVAILABLE");
+      const active = await tx.admission.findFirst({ where: { patientId: body.patientId, status: "ACTIVE" } });
+      if (active) throw new Error("ALREADY_ADMITTED");
+      const admission = await tx.admission.create({ data: { patientId: body.patientId!, bedId: body.bedId! } });
+      await tx.bed.update({ where: { id: body.bedId! }, data: { status: "OCCUPIED" } });
+      return admission;
+    });
+    return reply.code(201).send(result);
+  } catch (e) { return reply.code(409).send({ error: e instanceof Error && e.message === "ALREADY_ADMITTED" ? "Patient already has an active admission" : "Bed is not available" }); }
 });
 
 app.post("/api/v1/admissions/:id/transfer", async (request, reply) => {
@@ -57,29 +69,27 @@ app.post("/api/v1/admissions/:id/transfer", async (request, reply) => {
   const { toBedId } = request.body as { toBedId?: string };
   if (!toBedId) return reply.code(400).send({ error: "toBedId is required" });
   try {
-    const result = await prisma.$transaction(async tx => {
+    return await prisma.$transaction(async tx => {
       const admission = await tx.admission.findUnique({ where: { id } });
       const target = await tx.bed.findUnique({ where: { id: toBedId } });
-      if (!admission || admission.status !== "ACTIVE" || !target || target.status !== "AVAILABLE") throw new Error("TRANSFER_NOT_ALLOWED");
+      if (!admission || admission.status !== "ACTIVE" || !target || target.status !== "AVAILABLE") throw new Error();
       await tx.admissionTransfer.create({ data: { admissionId: id, fromBedId: admission.bedId, toBedId } });
       await tx.bed.update({ where: { id: admission.bedId }, data: { status: "AVAILABLE" } });
       await tx.bed.update({ where: { id: toBedId }, data: { status: "OCCUPIED" } });
       return tx.admission.update({ where: { id }, data: { bedId: toBedId } });
     });
-    return result;
   } catch { return reply.code(409).send({ error: "Transfer could not be completed" }); }
 });
 
 app.post("/api/v1/admissions/:id/discharge", async (request, reply) => {
   const { id } = request.params as { id: string };
   try {
-    const result = await prisma.$transaction(async tx => {
+    return await prisma.$transaction(async tx => {
       const admission = await tx.admission.findUnique({ where: { id } });
-      if (!admission || admission.status !== "ACTIVE") throw new Error("NOT_ACTIVE");
+      if (!admission || admission.status !== "ACTIVE") throw new Error();
       await tx.bed.update({ where: { id: admission.bedId }, data: { status: "CLEANING" } });
       return tx.admission.update({ where: { id }, data: { status: "DISCHARGED", dischargedAt: new Date() } });
     });
-    return result;
   } catch { return reply.code(404).send({ error: "Active admission not found" }); }
 });
 
