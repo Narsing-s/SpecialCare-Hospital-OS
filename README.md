@@ -6,10 +6,18 @@ A production-oriented Hospitalization & Hospital Operations Platform designed fo
 
 Registration → OPD/Emergency → Admission → Bed Allocation → Clinical Care → Nursing → Diagnostics → Pharmacy → Billing/Insurance → Transfer → Discharge → Follow-up.
 
+## Current workspaces
+
+- `/` — Hospital Command Center and patient registry
+- `/admin` — Facility & Bed Configuration
+- `/admissions` — Admissions, transfers, discharge and patient journey
+- `/nursing` — Nursing observation board and latest bedside observations
+- `/clinical` — Clinical care workspace with allergies, vitals, appointments and admission context
+
 ## Phase 1
 
 - Authentication and scope-aware RBAC
-- Hospital/campus/building/floor/ward/bed hierarchy
+- Hospital/campus/building/floor/ward/room/bed hierarchy
 - Patient registration and MRN
 - Appointments and queues
 - Encounters, notes, diagnoses and clinical orders
