@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
 import { registerDiagnosticsPharmacyRoutes } from "./diagnostics-pharmacy-routes.js";
+import { registerClinicalCareRoutes } from "./clinical-care-routes.js";
 
 const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
@@ -40,6 +41,7 @@ app.post("/api/v1/admissions", async (request, reply) => { const body = request.
 app.post("/api/v1/admissions/:id/transfer", async (request, reply) => { const { id } = request.params as { id: string }; const { toBedId } = request.body as { toBedId?: string }; if (!toBedId) return reply.code(400).send({ error: "toBedId is required" }); try { return await prisma.$transaction(async tx => { const admission = await tx.admission.findUnique({ where: { id } }); const target = await tx.bed.findUnique({ where: { id: toBedId } }); if (!admission || admission.status !== "ACTIVE" || !target || target.status !== "AVAILABLE") throw new Error(); await tx.admissionTransfer.create({ data: { admissionId: id, fromBedId: admission.bedId, toBedId } }); await tx.bed.update({ where: { id: admission.bedId }, data: { status: "CLEANING" } }); await tx.bed.update({ where: { id: toBedId }, data: { status: "OCCUPIED" } }); return tx.admission.update({ where: { id }, data: { bedId: toBedId } }); }); } catch { return reply.code(409).send({ error: "Transfer could not be completed" }); } });
 app.post("/api/v1/admissions/:id/discharge", async (request, reply) => { const { id } = request.params as { id: string }; try { return await prisma.$transaction(async tx => { const admission = await tx.admission.findUnique({ where: { id } }); if (!admission || admission.status !== "ACTIVE") throw new Error(); await tx.bed.update({ where: { id: admission.bedId }, data: { status: "CLEANING" } }); return tx.admission.update({ where: { id }, data: { status: "DISCHARGED", dischargedAt: new Date() } }); }); } catch { return reply.code(404).send({ error: "Active admission not found" }); } });
 
+await registerClinicalCareRoutes(app, prisma);
 await registerDiagnosticsPharmacyRoutes(app, prisma);
 
 app.addHook("onClose", async () => prisma.$disconnect());
