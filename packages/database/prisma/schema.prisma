@@ -1,0 +1,35 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+
+enum BedStatus { AVAILABLE RESERVED OCCUPIED CLEANING OUT_OF_SERVICE }
+enum AppointmentStatus { SCHEDULED CHECKED_IN IN_CONSULTATION COMPLETED CANCELLED NO_SHOW }
+enum EncounterStatus { OPEN CLOSED }
+enum AdmissionStatus { ACTIVE TRANSFERRED DISCHARGED }
+enum UserStatus { ACTIVE INACTIVE LOCKED }
+
+model Hospital { id String @id @default(cuid()) name String code String @unique campuses Campus[] departments Department[] patients Patient[] users User[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+model Campus { id String @id @default(cuid()) name String hospitalId String hospital Hospital @relation(fields:[hospitalId],references:[id]) buildings Building[] }
+model Building { id String @id @default(cuid()) name String campusId String campus Campus @relation(fields:[campusId],references:[id]) floors Floor[] }
+model Floor { id String @id @default(cuid()) name String buildingId String building Building @relation(fields:[buildingId],references:[id]) wards Ward[] }
+model Ward { id String @id @default(cuid()) name String floorId String floor Floor @relation(fields:[floorId],references:[id]) beds Bed[] }
+model Bed { id String @id @default(cuid()) number String status BedStatus @default(AVAILABLE) wardId String ward Ward @relation(fields:[wardId],references:[id]) admissions Admission[] @@unique([wardId,number]) }
+model Department { id String @id @default(cuid()) name String code String hospitalId String hospital Hospital @relation(fields:[hospitalId],references:[id]) doctors Doctor[] appointments Appointment[] @@unique([hospitalId,code]) }
+model User { id String @id @default(cuid()) email String @unique passwordHash String status UserStatus @default(ACTIVE) hospitalId String? hospital Hospital? @relation(fields:[hospitalId],references:[id]) roles UserRole[] auditLogs AuditLog[] }
+model Role { id String @id @default(cuid()) name String @unique permissions RolePermission[] users UserRole[] }
+model Permission { id String @id @default(cuid()) key String @unique roles RolePermission[] }
+model UserRole { userId String roleId String user User @relation(fields:[userId],references:[id],onDelete:Cascade) role Role @relation(fields:[roleId],references:[id],onDelete:Cascade) @@id([userId,roleId]) }
+model RolePermission { roleId String permissionId String role Role @relation(fields:[roleId],references:[id],onDelete:Cascade) permission Permission @relation(fields:[permissionId],references:[id],onDelete:Cascade) @@id([roleId,permissionId]) }
+model Patient { id String @id @default(cuid()) mrn String @unique firstName String lastName String dateOfBirth DateTime? phone String? email String? hospitalId String hospital Hospital @relation(fields:[hospitalId],references:[id]) allergies Allergy[] appointments Appointment[] encounters Encounter[] admissions Admission[] vitals Vital[] prescriptions Prescription[] invoices Invoice[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+model Allergy { id String @id @default(cuid()) patientId String substance String reaction String? patient Patient @relation(fields:[patientId],references:[id],onDelete:Cascade) }
+model Doctor { id String @id @default(cuid()) userId String @unique departmentId String user User @relation(fields:[userId],references:[id]) department Department @relation(fields:[departmentId],references:[id]) appointments Appointment[] encounters Encounter[] }
+model Appointment { id String @id @default(cuid()) patientId String doctorId String departmentId String status AppointmentStatus @default(SCHEDULED) scheduledAt DateTime patient Patient @relation(fields:[patientId],references:[id]) doctor Doctor @relation(fields:[doctorId],references:[id]) department Department @relation(fields:[departmentId],references:[id]) encounter Encounter? createdAt DateTime @default(now()) @@index([departmentId,scheduledAt]) @@index([doctorId,scheduledAt]) }
+model Encounter { id String @id @default(cuid()) patientId String doctorId String status EncounterStatus @default(OPEN) startedAt DateTime @default(now()) closedAt DateTime? patient Patient @relation(fields:[patientId],references:[id]) doctor Doctor @relation(fields:[doctorId],references:[id]) appointmentId String? @unique appointment Appointment? @relation(fields:[appointmentId],references:[id]) notes ClinicalNote[] diagnoses Diagnosis[] orders ClinicalOrder[] }
+model ClinicalNote { id String @id @default(cuid()) encounterId String authorId String body String createdAt DateTime @default(now()) encounter Encounter @relation(fields:[encounterId],references:[id],onDelete:Cascade) }
+model Diagnosis { id String @id @default(cuid()) encounterId String code String description String encounter Encounter @relation(fields:[encounterId],references:[id],onDelete:Cascade) }
+model ClinicalOrder { id String @id @default(cuid()) encounterId String type String status String @default("ORDERED") details Json? createdAt DateTime @default(now()) encounter Encounter @relation(fields:[encounterId],references:[id],onDelete:Cascade) }
+model Admission { id String @id @default(cuid()) patientId String bedId String status AdmissionStatus @default(ACTIVE) admittedAt DateTime @default(now()) dischargedAt DateTime? patient Patient @relation(fields:[patientId],references:[id]) bed Bed @relation(fields:[bedId],references:[id]) transfers AdmissionTransfer[] @@index([bedId,status]) }
+model AdmissionTransfer { id String @id @default(cuid()) admissionId String fromBedId String? toBedId String transferredAt DateTime @default(now()) admission Admission @relation(fields:[admissionId],references:[id],onDelete:Cascade) }
+model Vital { id String @id @default(cuid()) patientId String recordedBy String recordedAt DateTime @default(now()) temperature Decimal? heartRate Int? respiratoryRate Int? systolic Int? diastolic Int? spo2 Decimal? patient Patient @relation(fields:[patientId],references:[id],onDelete:Cascade) @@index([patientId,recordedAt]) }
+model Prescription { id String @id @default(cuid()) patientId String doctorId String status String @default("ACTIVE") createdAt DateTime @default(now()) patient Patient @relation(fields:[patientId],references:[id]) }
+model Invoice { id String @id @default(cuid()) patientId String status String @default("OPEN") total Decimal @default(0) createdAt DateTime @default(now()) patient Patient @relation(fields:[patientId],references:[id]) }
+model AuditLog { id String @id @default(cuid()) userId String? action String entity String entityId String? metadata Json? createdAt DateTime @default(now()) user User? @relation(fields:[userId],references:[id]) @@index([entity,entityId]) @@index([createdAt]) }
