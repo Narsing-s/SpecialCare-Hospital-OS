@@ -1,0 +1,1 @@
+{"name":"@specialcare/api","private":true,"scripts":{"dev":"tsx watch src/server.ts","build":"tsc","start":"node dist/server.js"},"dependencies":{"fastify":"latest"},"devDependencies":{"tsx":"latest","typescript":"latest","@types/node":"latest"}}
