@@ -4,9 +4,12 @@ const path = require("node:path");
 const schemaPath = path.join(__dirname, "schema.prisma");
 let schema = fs.readFileSync(schemaPath, "utf8");
 
+if (!schema.includes("doctor Doctor?")) schema = schema.replace("model User {", "model User { doctor Doctor?");
+if (!schema.includes("medicationAdministrations MedicationAdministration[]")) schema = schema.replace("model Patient {", "model Patient { medicationAdministrations MedicationAdministration[]");
+
 schema = schema.replace(/generator client\s*\{([\s\S]*?)\}/, (_m, body) => {
-  const tokens = body.trim().split(/\s+/);
-  return `generator client {\n  ${tokens[0]} = ${tokens.slice(2).join(" ")}\n}`;
+  const provider = body.match(/provider\s*=\s*"([^"]+)"/);
+  return `generator client {\n  provider = "${provider?.[1] || "prisma-client-js"}"\n}`;
 });
 
 schema = schema.replace(/datasource db\s*\{([\s\S]*?)\}/, (_m, body) => {
