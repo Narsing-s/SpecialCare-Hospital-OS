@@ -7,12 +7,13 @@ enum EncounterStatus { OPEN CLOSED }
 enum AdmissionStatus { ACTIVE TRANSFERRED DISCHARGED }
 enum UserStatus { ACTIVE INACTIVE LOCKED }
 
-model Hospital { id String @id @default(cuid()) name String code String @unique campuses Campus[] departments Department[] patients Patient[] users User[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
-model Campus { id String @id @default(cuid()) name String hospitalId String hospital Hospital @relation(fields:[hospitalId],references:[id]) buildings Building[] }
-model Building { id String @id @default(cuid()) name String campusId String campus Campus @relation(fields:[campusId],references:[id]) floors Floor[] }
-model Floor { id String @id @default(cuid()) name String buildingId String building Building @relation(fields:[buildingId],references:[id]) wards Ward[] }
-model Ward { id String @id @default(cuid()) name String floorId String floor Floor @relation(fields:[floorId],references:[id]) beds Bed[] }
-model Bed { id String @id @default(cuid()) number String status BedStatus @default(AVAILABLE) wardId String ward Ward @relation(fields:[wardId],references:[id]) admissions Admission[] @@unique([wardId,number]) }
+model Hospital { id String @id @default(cuid()) name String code String @unique campuses Campus[] departments Department[] patients Patient[] users User[] rooms Room[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+model Campus { id String @id @default(cuid()) name String hospitalId String hospital Hospital @relation(fields:[hospitalId],references:[id]) buildings Building[] rooms Room[] }
+model Building { id String @id @default(cuid()) name String campusId String campus Campus @relation(fields:[campusId],references:[id]) floors Floor[] rooms Room[] }
+model Floor { id String @id @default(cuid()) name String buildingId String building Building @relation(fields:[buildingId],references:[id]) wards Ward[] rooms Room[] }
+model Ward { id String @id @default(cuid()) name String floorId String floor Floor @relation(fields:[floorId],references:[id]) beds Bed[] rooms Room[] }
+model Room { id String @id @default(cuid()) number String name String? hospitalId String campusId String buildingId String floorId String wardId String hospital Hospital @relation(fields:[hospitalId],references:[id]) campus Campus @relation(fields:[campusId],references:[id]) building Building @relation(fields:[buildingId],references:[id]) floor Floor @relation(fields:[floorId],references:[id]) ward Ward @relation(fields:[wardId],references:[id]) beds Bed[] @@unique([wardId,number]) }
+model Bed { id String @id @default(cuid()) number String status BedStatus @default(AVAILABLE) wardId String roomId String? ward Ward @relation(fields:[wardId],references:[id]) room Room? @relation(fields:[roomId],references:[id]) admissions Admission[] @@unique([wardId,number]) @@index([roomId,status]) }
 model Department { id String @id @default(cuid()) name String code String hospitalId String hospital Hospital @relation(fields:[hospitalId],references:[id]) doctors Doctor[] appointments Appointment[] @@unique([hospitalId,code]) }
 model User { id String @id @default(cuid()) email String @unique passwordHash String status UserStatus @default(ACTIVE) hospitalId String? hospital Hospital? @relation(fields:[hospitalId],references:[id]) roles UserRole[] auditLogs AuditLog[] }
 model Role { id String @id @default(cuid()) name String @unique permissions RolePermission[] users UserRole[] }
