@@ -1,7 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-
 const prisma = new PrismaClient();
-
 async function main() {
   const hospital = await prisma.hospital.upsert({ where: { code: "SCMC" }, update: { name: "SpecialCare Medical Center" }, create: { code: "SCMC", name: "SpecialCare Medical Center" } });
   const campus = await prisma.campus.upsert({ where: { id: "seed-campus-main" }, update: {}, create: { id: "seed-campus-main", name: "Main Campus", hospitalId: hospital.id } });
@@ -10,7 +8,6 @@ async function main() {
   const medicine = await prisma.department.findFirstOrThrow({ where: { hospitalId: hospital.id, code: "D04" } });
   const user = await prisma.user.upsert({ where: { email: "demo.clinician@specialcare.local" }, update: { status: "ACTIVE", hospitalId: hospital.id }, create: { email: "demo.clinician@specialcare.local", passwordHash: "DISABLED-DEMO-ACCOUNT", hospitalId: hospital.id } });
   await prisma.doctor.upsert({ where: { userId: user.id }, update: { departmentId: medicine.id }, create: { userId: user.id, departmentId: medicine.id } });
-
   const wardNames = ["Emergency", "ICU", "Cardiology", "Neurology", "General Medicine", "Orthopedics", "Pediatrics", "Surgical", "Recovery", "Isolation"];
   let bedNumber = 1;
   for (let b = 1; b <= 8; b++) {
@@ -29,7 +26,8 @@ async function main() {
       }
     }
   }
-  console.log(`Seeded ${bedNumber - 1} beds across ${8 * 4 * wardNames.length} wards and a demo clinician.`);
+  const blood=["A+","B+","O+","O-","AB+"]; for(let i=0;i<blood.length;i++) await prisma.bloodUnit.upsert({where:{donationCode:`DEMO-${String(i+1).padStart(3,"0")}`},update:{status:"AVAILABLE"},create:{hospitalId:hospital.id,bloodGroup:blood[i],component:"RED_CELLS",donationCode:`DEMO-${String(i+1).padStart(3,"0")}`,expiresAt:new Date(Date.now()+30*86400000)}});
+  for(const [vehicleCode,driverName] of [["AMB-01","Demo Driver 01"],["AMB-02","Demo Driver 02"]] as const) await prisma.ambulanceTrip.upsert({where:{id:`seed-${vehicleCode}`},update:{status:"AVAILABLE",driverName},create:{id:`seed-${vehicleCode}`,hospitalId:hospital.id,vehicleCode,driverName,status:"AVAILABLE"}});
+  console.log(`Seeded ${bedNumber - 1} beds across ${8 * 4 * wardNames.length} wards, a demo clinician, 5 blood units and 2 ambulances.`);
 }
-
 main().finally(() => prisma.$disconnect());
