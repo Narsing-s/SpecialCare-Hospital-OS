@@ -7,6 +7,9 @@ async function main() {
   const campus = await prisma.campus.upsert({ where: { id: "seed-campus-main" }, update: {}, create: { id: "seed-campus-main", name: "Main Campus", hospitalId: hospital.id } });
   const departments = ["Emergency", "Cardiology", "Neurology", "General Medicine", "Orthopedics", "Pediatrics", "Radiology", "Laboratory"];
   for (const [index, name] of departments.entries()) await prisma.department.upsert({ where: { hospitalId_code: { hospitalId: hospital.id, code: `D${String(index + 1).padStart(2, "0")}` } }, update: { name }, create: { hospitalId: hospital.id, code: `D${String(index + 1).padStart(2, "0")}`, name } });
+  const medicine = await prisma.department.findFirstOrThrow({ where: { hospitalId: hospital.id, code: "D04" } });
+  const user = await prisma.user.upsert({ where: { email: "demo.clinician@specialcare.local" }, update: { status: "ACTIVE", hospitalId: hospital.id }, create: { email: "demo.clinician@specialcare.local", passwordHash: "DISABLED-DEMO-ACCOUNT", hospitalId: hospital.id } });
+  await prisma.doctor.upsert({ where: { userId: user.id }, update: { departmentId: medicine.id }, create: { userId: user.id, departmentId: medicine.id } });
 
   const wardNames = ["Emergency", "ICU", "Cardiology", "Neurology", "General Medicine", "Orthopedics", "Pediatrics", "Surgical", "Recovery", "Isolation"];
   let bedNumber = 1;
@@ -26,7 +29,7 @@ async function main() {
       }
     }
   }
-  console.log(`Seeded ${bedNumber - 1} beds across ${8 * 4 * wardNames.length} wards.`);
+  console.log(`Seeded ${bedNumber - 1} beds across ${8 * 4 * wardNames.length} wards and a demo clinician.`);
 }
 
 main().finally(() => prisma.$disconnect());
