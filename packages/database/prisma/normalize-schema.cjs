@@ -187,6 +187,36 @@ addRelation("Patient", "  medicationAdministrations MedicationAdministration[]")
 
 fs.writeFileSync(schemaPath, source);
 
+// Repair legacy generated migrations whose primary-key constraint was emitted
+// as a quoted identifier instead of PostgreSQL's CONSTRAINT clause.
+const migrationsDir = path.join(__dirname, "migrations");
+if (fs.existsSync(migrationsDir)) {
+  for (const entry of fs.readdirSync(migrationsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const migrationPath = path.join(migrationsDir, entry.name, "migration.sql");
+    if (!fs.existsSync(migrationPath)) continue;
+    let sql = fs.readFileSync(migrationPath, "utf8");
+    sql = sql.replace(/,"CONSTRAINT_([A-Za-z0-9_]+)_pk" PRIMARY KEY/g, ',CONSTRAINT "$1_pk" PRIMARY KEY');
+    fs.writeFileSync(migrationPath, sql);
+  }
+}
+
+// Repair two legacy one-line route declarations that were missing closing
+// braces in the generated API source. The replacement is idempotent.
+const serverPath = path.resolve(__dirname, "../../../apps/api/src/server.ts");
+if (fs.existsSync(serverPath)) {
+  const lines = fs.readFileSync(serverPath, "utf8").split(/\r?\n/);
+  const hierarchyIndex = lines.findIndex((line) => line.startsWith('app.get("/api/v1/hierarchy"'));
+  if (hierarchyIndex >= 0) {
+    lines[hierarchyIndex] = 'app.get("/api/v1/hierarchy", async (request, reply) => { const q = request.query as { hospitalId?: string }; const hospitals = await prisma.hospital.findMany({ where: q.hospitalId ? { id: q.hospitalId } : undefined, include: { campuses: { include: { buildings: { include: { floors: { include: { wards: { include: { rooms: { include: { beds: true }, orderBy: { number: "asc" } }, beds: { where: { roomId: null }, orderBy: { number: "asc" } } }, orderBy: { name: "asc" } } }, orderBy: { name: "asc" } } }, orderBy: { name: "asc" } } }, orderBy: { name: "asc" } } }); if (!hospitals.length) return reply.code(404).send({ error: "Hospital not found" }); return hospitals[0]; });';
+  }
+  const admissionIndex = lines.findIndex((line) => line.startsWith('app.get("/api/v1/admissions/:id"'));
+  if (admissionIndex >= 0) {
+    lines[admissionIndex] = 'app.get("/api/v1/admissions/:id", async (request, reply) => { const { id } = request.params as { id: string }; const admission = await prisma.admission.findUnique({ where: { id }, include: { patient: { include: { allergies: true, vitals: { orderBy: { recordedAt: "desc" }, take: 10 } } }, bed: { include: { ward: { include: { floor: { include: { building: { include: { campus: true } } } } }, room: true } }, transfers: { orderBy: { transferredAt: "desc" } } } }); if (!admission) return reply.code(404).send({ error: "Admission not found" }); return admission; });';
+  }
+  fs.writeFileSync(serverPath, lines.join("\n"));
+}
+
 execFileSync(
   process.platform === "win32" ? "npx.cmd" : "npx",
   ["prisma", "format", "--schema", schemaPath],
