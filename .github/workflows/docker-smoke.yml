@@ -1,0 +1,56 @@
+name: Docker Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start API and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for API
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:4000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+
+      - name: Smoke test database-backed API
+        run: |
+          set -e
+          curl -fsS http://127.0.0.1:4000/health
+          curl -fsS http://127.0.0.1:4000/api/v1/hospitals
+          curl -fsS http://127.0.0.1:4000/api/v1/hierarchy
+          curl -fsS http://127.0.0.1:4000/api/v1/dashboard/summary
+          curl -fsS http://127.0.0.1:4000/api/v1/patients
+          curl -fsS http://127.0.0.1:4000/api/v1/admissions
+          curl -fsS http://127.0.0.1:4000/api/v1/appointments
+          curl -fsS http://127.0.0.1:4000/api/v1/doctors
+          curl -fsS http://127.0.0.1:4000/api/v1/encounters
+          curl -fsS http://127.0.0.1:4000/api/v1/diagnostics/orders
+          curl -fsS http://127.0.0.1:4000/api/v1/prescriptions
+          curl -fsS http://127.0.0.1:4000/api/v1/inventory
+          curl -fsS http://127.0.0.1:4000/api/v1/operations/summary
+          curl -fsS http://127.0.0.1:4000/api/v1/emergency
+          curl -fsS http://127.0.0.1:4000/api/v1/icu
+          curl -fsS http://127.0.0.1:4000/api/v1/ot
+          curl -fsS http://127.0.0.1:4000/api/v1/blood-bank
+          curl -fsS http://127.0.0.1:4000/api/v1/ambulances
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down -v
