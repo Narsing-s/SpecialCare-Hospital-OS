@@ -1,51 +1,26 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
 
 const schemaPath = path.join(__dirname, "schema.prisma");
 let schema = fs.readFileSync(schemaPath, "utf8");
 
-// The checked-in Prisma schema is intentionally compact (many blocks are one line).
-// Add only the two compatibility relations that older generated schemas may miss.
-function ensureRelation(modelName, relationLine) {
-  const modelPattern = new RegExp(`model\\s+${modelName}\\s*\\{`);
-  const match = modelPattern.exec(schema);
-  if (!match || match.index == null) return;
+// Keep normalization deterministic. The checked-in schema is compact, so avoid
+// brace-based parsing and avoid running `prisma format` here (Prisma formatting
+// can rewrite compact blocks before validation). Only add the two inverse
+// relations required by the current model graph when they are missing.
+function ensureRelation(modelName, anchor, relationLine) {
+  const modelPattern = new RegExp(`model\\s+${modelName}\\s+\\{[\\s\\S]*?${anchor.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*\\}`);
+  if (modelPattern.test(schema)) return;
 
-  const open = schema.indexOf("{", match.index);
-  if (open < 0) throw new Error(`Unable to find opening brace for ${modelName}`);
-
-  let depth = 0;
-  let close = -1;
-  for (let i = open; i < schema.length; i += 1) {
-    if (schema[i] === "{") depth += 1;
-    if (schema[i] === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        close = i;
-        break;
-      }
-    }
+  const fallbackPattern = new RegExp(`(model\\s+${modelName}\\s+\\{[\\s\\S]*?${anchor.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")})\\s*\\}`);
+  const updated = schema.replace(fallbackPattern, `$1\n${relationLine}\n}`);
+  if (updated === schema) {
+    throw new Error(`Unable to add ${relationLine.trim()} to ${modelName}`);
   }
-  if (close < 0) throw new Error(`Unable to find closing brace for ${modelName}`);
-
-  const block = schema.slice(open + 1, close);
-  const fieldName = relationLine.trim().split(/\s+/)[0];
-  const fieldPattern = new RegExp(`(^|\\n)\\s*${fieldName}\\s+`);
-  if (fieldPattern.test(block)) return;
-
-  const prefix = schema.slice(0, close).replace(/\s*$/, "");
-  const suffix = schema.slice(close);
-  schema = `${prefix}\n${relationLine}\n${suffix}`;
+  schema = updated;
 }
 
-ensureRelation("User", "  doctor Doctor?");
-ensureRelation("Patient", "  medicationAdministrations MedicationAdministration[]");
+ensureRelation("User", "auditLogs AuditLog[]", "  doctor Doctor?");
+ensureRelation("Patient", "updatedAt DateTime @updatedAt", "  medicationAdministrations MedicationAdministration[]");
 
-fs.writeFileSync(schemaPath, `${schema.trim()}\n`);
-
-execFileSync(
-  process.platform === "win32" ? "npx.cmd" : "npx",
-  ["prisma", "format", "--schema", schemaPath],
-  { cwd: path.resolve(__dirname, ".."), stdio: "inherit" },
-);
+fs.writeFileSync(schemaPath, schema.trimEnd() + "\n");
