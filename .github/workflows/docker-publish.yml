@@ -13,6 +13,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: specialcare-hospital-api
+  IMAGE_NAMESPACE: narsing-s
 
 jobs:
   publish:
@@ -35,8 +36,8 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/specialcare-hospital-api:latest
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/specialcare-hospital-api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Show published image
-        run: echo "Published ${{ env.REGISTRY }}/${{ github.repository_owner }}/specialcare-hospital-api:${{ github.sha }}"
+        run: echo "Published ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
