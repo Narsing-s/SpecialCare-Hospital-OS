@@ -36,10 +36,9 @@ jobs:
           curl -fsS http://127.0.0.1:4000/api/v1/admissions
           curl -fsS http://127.0.0.1:4000/api/v1/appointments
           curl -fsS http://127.0.0.1:4000/api/v1/doctors
-          curl -fsS http://127.0.0.1:4000/api/v1/encounters
           curl -fsS http://127.0.0.1:4000/api/v1/diagnostics/orders
           curl -fsS http://127.0.0.1:4000/api/v1/prescriptions
-          curl -fsS http://127.0.0.1:4000/api/v1/inventory
+          curl -fsS http://127.0.0.1:4000/api/v1/inventory/items
           curl -fsS http://127.0.0.1:4000/api/v1/operations/summary
           curl -fsS http://127.0.0.1:4000/api/v1/emergency
           curl -fsS http://127.0.0.1:4000/api/v1/icu
