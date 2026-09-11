@@ -5,6 +5,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4000
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY packages/database/package.json packages/database/package.json
