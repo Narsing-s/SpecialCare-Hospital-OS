@@ -5,38 +5,38 @@ const { execFileSync } = require("node:child_process");
 const schemaPath = path.join(__dirname, "schema.prisma");
 let schema = fs.readFileSync(schemaPath, "utf8");
 
-// Keep normalization idempotent. Prisma models in this repository may initially
-// be written on one line, so relation fields must be inserted immediately before
-// the model's closing brace, not after the first newline following the opening brace.
+// The checked-in Prisma schema is intentionally compact (many blocks are one line).
+// Add only the two compatibility relations that older generated schemas may miss.
 function ensureRelation(modelName, relationLine) {
-  const modelStart = new RegExp(`model\\s+${modelName}\\s*\\{`, "m");
-  const startMatch = schema.match(modelStart);
-  if (!startMatch || startMatch.index == null) return;
+  const modelPattern = new RegExp(`model\\s+${modelName}\\s*\\{`);
+  const match = modelPattern.exec(schema);
+  if (!match || match.index == null) return;
 
-  const start = startMatch.index;
-  const braceStart = schema.indexOf("{", start);
-  if (braceStart < 0) return;
+  const open = schema.indexOf("{", match.index);
+  if (open < 0) throw new Error(`Unable to find opening brace for ${modelName}`);
 
   let depth = 0;
-  let end = -1;
-  for (let i = braceStart; i < schema.length; i += 1) {
+  let close = -1;
+  for (let i = open; i < schema.length; i += 1) {
     if (schema[i] === "{") depth += 1;
-    else if (schema[i] === "}") {
+    if (schema[i] === "}") {
       depth -= 1;
       if (depth === 0) {
-        end = i;
+        close = i;
         break;
       }
     }
   }
-  if (end < 0) throw new Error(`Unable to find end of Prisma model ${modelName}`);
+  if (close < 0) throw new Error(`Unable to find closing brace for ${modelName}`);
 
-  const block = schema.slice(braceStart + 1, end);
-  if (new RegExp(`(^|\\n)\\s*${relationLine.trim().replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*(?=\\n|$)`).test(block)) return;
+  const block = schema.slice(open + 1, close);
+  const fieldName = relationLine.trim().split(/\s+/)[0];
+  const fieldPattern = new RegExp(`(^|\\n)\\s*${fieldName}\\s+`);
+  if (fieldPattern.test(block)) return;
 
-  const beforeClose = schema.slice(0, end).replace(/\\s*$/, "");
-  const afterClose = schema.slice(end);
-  schema = `${beforeClose}\n${relationLine}\n${afterClose}`;
+  const prefix = schema.slice(0, close).replace(/\s*$/, "");
+  const suffix = schema.slice(close);
+  schema = `${prefix}\n${relationLine}\n${suffix}`;
 }
 
 ensureRelation("User", "  doctor Doctor?");
@@ -44,7 +44,6 @@ ensureRelation("Patient", "  medicationAdministrations MedicationAdministration[
 
 fs.writeFileSync(schemaPath, `${schema.trim()}\n`);
 
-// Prisma owns formatting and validation.
 execFileSync(
   process.platform === "win32" ? "npx.cmd" : "npx",
   ["prisma", "format", "--schema", schemaPath],
