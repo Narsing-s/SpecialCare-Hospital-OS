@@ -6,6 +6,7 @@ import { registerDiagnosticsPharmacyRoutes } from "./diagnostics-pharmacy-routes
 import { registerClinicalCareRoutes } from "./clinical-care-routes.js";
 import { registerHospitalOperationsRoutes } from "./hospital-operations-routes.js";
 import { registerEnterpriseRoutes } from "./enterprise-routes.js";
+import { registerAuthRoutes, verifyToken } from "./auth-routes.js";
 
 const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
@@ -29,6 +30,22 @@ async function hospitalIdFor(input?: string) {
 }
 function mrn() { return `SC-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; }
 const required = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+
+app.addHook("onRequest", async (request, reply) => {
+  const path=request.url.split("?")[0];
+  if (!path.startsWith("/api/v1/") || path==="/api/v1/auth/login") return;
+  const header=request.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return reply.code(401).send({error:"Authentication required",code:"AUTH_REQUIRED"});
+  const user=verifyToken(header.slice(7));
+  if (!user?.sub) return reply.code(401).send({error:"Invalid or expired session",code:"SESSION_EXPIRED"});
+  (request as any).user=user;
+});
+
+app.addHook("onResponse", async (request) => {
+  const user=(request as any).user as {sub?:string}|undefined;
+  if (!user?.sub || !request.url.startsWith("/api/v1/") || request.method==="GET" || request.method==="HEAD" || request.method==="OPTIONS") return;
+  try { await prisma.auditLog.create({data:{userId:String(user.sub),action:request.method,entity:request.url.split("?")[0].split("/").slice(3,5).join("/"),entityId:(request.params as any)?.id,metadata:{statusCode:request.server?request.id:request.id}}}); } catch {}
+});
 
 app.get("/health", async () => ({ status: "ok", service: "SpecialCare Hospital API", version: "0.9.0" }));
 app.get("/api/v1/hospitals", async () => ({ data: await prisma.hospital.findMany({ include: { campuses: { include: { buildings: { include: { floors: { include: { wards: true } } } } } } }, orderBy: { createdAt: "asc" } }) }));
@@ -56,6 +73,7 @@ app.post("/api/v1/admissions/:id/discharge", async (request, reply) => { const {
 
 async function start() {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",").map(x=>x.trim()) : true });
+  await registerAuthRoutes(app, prisma);
   await registerClinicalCareRoutes(app, prisma);
   await registerDiagnosticsPharmacyRoutes(app, prisma);
   await registerHospitalOperationsRoutes(app, prisma);
