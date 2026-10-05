@@ -33,7 +33,7 @@ const required = (value: unknown) => typeof value === "string" && value.trim().l
 
 app.addHook("onRequest", async (request, reply) => {
   const path=request.url.split("?")[0];
-  if (!path.startsWith("/api/v1/") || path==="/api/v1/auth/login") return;
+  if (!path.startsWith("/api/v1/") || path==="/api/v1/auth/login" || request.method==="OPTIONS") return;
   const header=request.headers.authorization;
   if (!header?.startsWith("Bearer ")) return reply.code(401).send({error:"Authentication required",code:"AUTH_REQUIRED"});
   const user=verifyToken(header.slice(7));
@@ -84,7 +84,7 @@ app.post("/api/v1/admissions/:id/transfer", async (request, reply) => { const { 
 app.post("/api/v1/admissions/:id/discharge", async (request, reply) => { const { id } = request.params as { id: string }; try { return await prisma.$transaction(async tx => { const admission = await tx.admission.findUnique({ where: { id } }); if (!admission || admission.status !== "ACTIVE") throw new Error(); await tx.bed.update({ where: { id: admission.bedId }, data: { status: "CLEANING" } }); return tx.admission.update({ where: { id }, data: { status: "DISCHARGED", dischargedAt: new Date() } }); }); } catch { return reply.code(404).send({ error: "Active admission not found" }); } });
 
 async function start() {
-  await app.register(cors, { origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",").map(x=>x.trim()) : true });
+  await app.register(cors, { origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",").map(x=>x.trim()) : ["http://localhost:3000"], credentials: true });
   await registerAuthRoutes(app, prisma);
   await registerClinicalCareRoutes(app, prisma);
   await registerDiagnosticsPharmacyRoutes(app, prisma);
