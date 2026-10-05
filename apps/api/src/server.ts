@@ -3,10 +3,21 @@ import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
 import { registerDiagnosticsPharmacyRoutes } from "./diagnostics-pharmacy-routes.js";
 import { registerClinicalCareRoutes } from "./clinical-care-routes.js";
+import { registerHospitalOperationsRoutes } from "./hospital-operations-routes.js";
+import { registerEnterpriseRoutes } from "./enterprise-routes.js";
 
 const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
-await app.register(cors, { origin: true });
+await app.register(cors, { origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",").map(x=>x.trim()) : true });
+app.addHook("onRequest", async (request, reply) => {
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.header("X-Frame-Options", "DENY");
+  reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  reply.header("Cache-Control", "no-store");
+  request.headers["x-request-id"] = request.headers["x-request-id"] || crypto.randomUUID();
+  reply.header("X-Request-Id", request.headers["x-request-id"] as string);
+});
 
 async function hospitalIdFor(input?: string) {
   if (input) return input;
@@ -30,7 +41,8 @@ app.post("/api/v1/beds", async (request, reply) => { const b = request.body as {
 app.patch("/api/v1/beds/:id", async (request, reply) => { const { id } = request.params as { id: string }; const b = request.body as { status?: string; roomId?: string | null }; if (!b.status && b.roomId === undefined) return reply.code(400).send({ error: "status or roomId is required" }); try { return await prisma.bed.update({ where: { id }, data: { ...(b.status ? { status: b.status as any } : {}), ...(b.roomId !== undefined ? { roomId: b.roomId } : {}) }, include: { ward: true, room: true } }); } catch { return reply.code(404).send({ error: "Bed not found" }); } });
 app.post("/api/v1/beds/:id/clean", async (request, reply) => { const { id } = request.params as { id: string }; try { const bed = await prisma.bed.findUnique({ where: { id } }); if (!bed) return reply.code(404).send({ error: "Bed not found" }); if (bed.status !== "CLEANING") return reply.code(409).send({ error: "Bed is not in cleaning status" }); return await prisma.bed.update({ where: { id }, data: { status: "AVAILABLE" }, include: { ward: true, room: true } }); } catch { return reply.code(500).send({ error: "Could not complete bed cleaning" }); } });
 app.get("/api/v1/hierarchy", async (request, reply) => { const q = request.query as { hospitalId?: string }; const hospitals = await prisma.hospital.findMany({ where: q.hospitalId ? { id: q.hospitalId } : undefined, include: { campuses: { include: { buildings: { include: { floors: { include: { wards: { include: { rooms: { include: { beds: true }, orderBy: { number: "asc" } }, beds: { where: { roomId: null }, orderBy: { number: "asc" } } }, orderBy: { name: "asc" } } }, orderBy: { name: "asc" } } }, orderBy: { name: "asc" } } }, orderBy: { name: "asc" } } }); if (!hospitals.length) return reply.code(404).send({ error: "Hospital not found" }); return hospitals[0]; });
-app.get("/api/v1/dashboard/summary", async () => ({ beds: { total: await prisma.bed.count(), occupied: await prisma.bed.count({ where: { status: "OCCUPIED" } }), available: await prisma.bed.count({ where: { status: "AVAILABLE" } }), cleaning: await prisma.bed.count({ where: { status: "CLEANING" } }) }, patients: { total: await prisma.patient.count() }, admissions: { active: await prisma.admission.count({ where: { status: "ACTIVE" } }) }, emergency: { activePatients: 0 }, lab: { pendingReports: 0 } }));
+app.get("/api/v1/beds", async (request) => { const q = request.query as { status?: string; wardId?: string }; return { data: await prisma.bed.findMany({ where: { ...(q.status ? { status: q.status as any } : {}), ...(q.wardId ? { wardId: q.wardId } : {}) }, include: { ward: { include: { floor: { include: { building: { include: { campus: true } } } } } }, room: true }, orderBy: { number: "asc" }, take: 1000 }) }; });
+app.get("/api/v1/dashboard/summary", async () => ({ beds: { total: await prisma.bed.count(), occupied: await prisma.bed.count({ where: { status: "OCCUPIED" } }), available: await prisma.bed.count({ where: { status: "AVAILABLE" } }), cleaning: await prisma.bed.count({ where: { status: "CLEANING" } }) }, patients: { total: await prisma.patient.count() }, admissions: { active: await prisma.admission.count({ where: { status: "ACTIVE" } }) }, emergency: { activePatients: await prisma.emergencyCase.count({ where: { status: { notIn: ["DISCHARGED","CLOSED"] } } }) }, lab: { pendingReports: await prisma.diagnosticResult.count({ where: { status: { in: ["PRELIMINARY","PENDING"] } } }) } }));
 app.get("/api/v1/patients", async (request) => { const q = (request.query as { search?: string }).search?.trim(); const data = await prisma.patient.findMany({ where: q ? { OR: [{ mrn: { contains: q, mode: "insensitive" } }, { firstName: { contains: q, mode: "insensitive" } }, { lastName: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }] } : undefined, include: { admissions: { where: { status: "ACTIVE" }, include: { bed: { include: { ward: true, room: true } } }, take: 1 } }, orderBy: { createdAt: "desc" }, take: 100 }); return { data }; });
 app.post("/api/v1/patients", async (request, reply) => { const body = request.body as { firstName?: string; lastName?: string; dateOfBirth?: string; phone?: string; email?: string; hospitalId?: string }; if (!required(body.firstName) || !required(body.lastName)) return reply.code(400).send({ error: "firstName and lastName are required" }); const patient = await prisma.patient.create({ data: { mrn: mrn(), firstName: body.firstName!.trim(), lastName: body.lastName!.trim(), dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : undefined, phone: body.phone?.trim() || undefined, email: body.email?.trim() || undefined, hospitalId: await hospitalIdFor(body.hospitalId) } }); return reply.code(201).send(patient); });
 app.get("/api/v1/patients/:id", async (request, reply) => { const { id } = request.params as { id: string }; const patient = await prisma.patient.findUnique({ where: { id }, include: { allergies: true, admissions: { include: { bed: { include: { ward: true, room: true } }, transfers: true }, orderBy: { admittedAt: "desc" } }, vitals: { orderBy: { recordedAt: "desc" }, take: 20 }, appointments: { orderBy: { scheduledAt: "desc" }, take: 20 } } }); if (!patient) return reply.code(404).send({ error: "Patient not found" }); return patient; });
@@ -43,6 +55,8 @@ app.post("/api/v1/admissions/:id/discharge", async (request, reply) => { const {
 
 await registerClinicalCareRoutes(app, prisma);
 await registerDiagnosticsPharmacyRoutes(app, prisma);
+await registerHospitalOperationsRoutes(app, prisma);
+await registerEnterpriseRoutes(app, prisma);
 
 app.addHook("onClose", async () => prisma.$disconnect());
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT || 4000) });
