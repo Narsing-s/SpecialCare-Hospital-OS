@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { randomUUID } from "node:crypto";
 import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
 import { registerDiagnosticsPharmacyRoutes } from "./diagnostics-pharmacy-routes.js";
@@ -15,8 +16,8 @@ app.addHook("onRequest", async (request, reply) => {
   reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
   reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   reply.header("Cache-Control", "no-store");
-  request.headers["x-request-id"] = request.headers["x-request-id"] || crypto.randomUUID();
-  reply.header("X-Request-Id", request.headers["x-request-id"] as string);
+  const requestId = typeof request.headers["x-request-id"] === "string" ? request.headers["x-request-id"] : randomUUID();
+  reply.header("X-Request-Id", requestId);
 });
 
 async function hospitalIdFor(input?: string) {
