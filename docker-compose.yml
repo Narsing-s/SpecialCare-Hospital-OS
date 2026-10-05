@@ -28,7 +28,7 @@ services:
       NODE_ENV: production
       PORT: 4000
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-change-this-password}@postgres:5432/specialcare
-      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret}
+      AUTH_SECRET: ${AUTH_SECRET:-change-this-auth-secret}
     ports:
       - "4000:4000"
     healthcheck:
