@@ -18,16 +18,19 @@ export async function registerAuthRoutes(app:FastifyInstance,prisma:PrismaClient
     const permissions=[...new Set(user.roles.flatMap(x=>x.role.permissions.map(y=>y.permission.key)))];
     const roles=user.roles.map(x=>x.role.name);
     const token=sign({sub:user.id,email:user.email,hospitalId:user.hospitalId||null,roles,permissions,exp:Math.floor(Date.now()/1000)+8*60*60});
+    const secure=process.env.NODE_ENV==="production";
+    reply.header("Set-Cookie",`sc_session=${token}; Path=/; HttpOnly; SameSite=${secure?"None":"Lax"}${secure?"; Secure":""}; Max-Age=28800`);
     await prisma.auditLog.create({data:{userId:user.id,action:"LOGIN",entity:"User",entityId:user.id,metadata:{roles}}});
-    return {token,user:{id:user.id,email:user.email,status:user.status,hospitalId:user.hospitalId,roles,permissions,hospital:user.hospital}}; 
+    return {user:{id:user.id,email:user.email,status:user.status,hospitalId:user.hospitalId,roles,permissions,hospital:user.hospital}}; 
   });
   app.get("/api/v1/auth/me",async(request,reply)=>{
     const auth=request.headers.authorization;
-    if(!auth?.startsWith("Bearer "))return reply.code(401).send({error:"Authentication required"});
-    const payload=verifyToken(auth.slice(7));if(!payload?.sub)return reply.code(401).send({error:"Invalid or expired session"});
+    const cookie=request.headers.cookie?.match(/(?:^|;\\s*)sc_session=([^;]+)/)?.[1];
+    const payload=verifyToken(auth?.startsWith("Bearer ")?auth.slice(7):cookie||"");if(!payload?.sub)return reply.code(401).send({error:"Invalid or expired session"});
     const user=await prisma.user.findUnique({where:{id:String(payload.sub)},include:{roles:{include:{role:{include:{permissions:{include:{permission:true}}}}}},hospital:true}});
     if(!user||user.status!=="ACTIVE")return reply.code(401).send({error:"User account is not active"});
     return {user:{id:user.id,email:user.email,status:user.status,hospitalId:user.hospitalId,roles:user.roles.map(x=>x.role.name),permissions:[...new Set(user.roles.flatMap(x=>x.role.permissions.map(y=>y.permission.key)))],hospital:user.hospital}};
   });
+  app.post("/api/v1/auth/logout",async(request,reply)=>{reply.header("Set-Cookie","sc_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"); return {ok:true};});
 }
 export { hashPassword };
