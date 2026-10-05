@@ -87,3 +87,20 @@ The repository is a strong portfolio/reference implementation, but it is **not y
 - Add FHIR/HL7/PACS/LIS integrations, document/object storage, retention policies, backup/restore and disaster recovery controls as required by the deployment.
 
 Never use the demo credentials or seed data for a real patient environment.
+
+
+## Authentication and security configuration
+
+Protected API routes require an authenticated hospital session. Browser sessions use an HttpOnly cookie; API clients may use a Bearer token.
+
+Set these environment variables outside source control:
+
+- `AUTH_SECRET` — long, random signing secret; required for deployed environments.
+- `CORS_ORIGIN` — comma-separated trusted frontend origins; never use a wildcard in production.
+- `SEED_ADMIN_PASSWORD` — only for development/demo database seeding; do not commit the value.
+
+The seed creates the `HOSPITAL_ADMIN` role and permission mappings for the demo administrator. Change the seeded password immediately in a real environment.
+
+Password storage uses salted scrypt rather than plaintext credentials. OWASP recommends memory-hard password hashing such as Argon2id or scrypt for password storage. citeturn0search0
+
+For production deployment, use HTTPS and an external identity provider/SSO with MFA where available. Browser session credentials should remain HttpOnly/Secure and should not be placed in localStorage. citeturn0search2
