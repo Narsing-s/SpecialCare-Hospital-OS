@@ -38,6 +38,18 @@ app.addHook("onRequest", async (request, reply) => {
   if (!header?.startsWith("Bearer ")) return reply.code(401).send({error:"Authentication required",code:"AUTH_REQUIRED"});
   const user=verifyToken(header.slice(7));
   if (!user?.sub) return reply.code(401).send({error:"Invalid or expired session",code:"SESSION_EXPIRED"});
+  const permissions=Array.isArray(user.permissions)?user.permissions.map(String):[];
+  if (!permissions.includes("ADMIN_ALL")) {
+    const requiredPermission = path.startsWith("/api/v1/patients") ? (request.method==="GET" ? "PATIENT_READ" : "PATIENT_WRITE")
+      : path.startsWith("/api/v1/clinical") || path.startsWith("/api/v1/encounters") || path.startsWith("/api/v1/vitals") ? (request.method==="GET" ? "CLINICAL_READ" : "CLINICAL_WRITE")
+      : path.startsWith("/api/v1/admissions") || path.startsWith("/api/v1/beds") ? (request.method==="GET" ? "ADMISSION_READ" : "ADMISSION_WRITE")
+      : path.startsWith("/api/v1/billing") || path.startsWith("/api/v1/invoices") || path.startsWith("/api/v1/payments") ? (request.method==="GET" ? "BILLING_READ" : "BILLING_WRITE")
+      : path.startsWith("/api/v1/operations") || path.startsWith("/api/v1/emergency") || path.startsWith("/api/v1/icu") || path.startsWith("/api/v1/ot") || path.startsWith("/api/v1/blood-bank") || path.startsWith("/api/v1/ambulances") ? (request.method==="GET" ? "OPERATIONS_READ" : "OPERATIONS_WRITE")
+      : path.startsWith("/api/v1/pharmacy") || path.startsWith("/api/v1/prescriptions") ? (request.method==="GET" ? "PHARMACY_READ" : "PHARMACY_WRITE")
+      : path.startsWith("/api/v1/reports") || path.startsWith("/api/v1/dashboard") ? "REPORTS_READ"
+      : path.startsWith("/api/v1/audit") ? "AUDIT_READ" : null;
+    if (requiredPermission && !permissions.includes(requiredPermission)) return reply.code(403).send({error:"Insufficient permission",code:"FORBIDDEN",requiredPermission});
+  }
   (request as any).user=user;
 });
 
