@@ -73,6 +73,22 @@ npm run dev:api
 > Clinical workflows, privacy/security controls and regulatory requirements must be validated by qualified healthcare, legal and security professionals before real-world deployment. The demo seed data and disabled demo clinician account are for development only.
 
 
+## Local startup (fixes localhost:4000 connection errors)
+
+The browser frontend expects the API at `http://localhost:4000`. The frontend alone does **not** start the API.
+
+1. Start PostgreSQL:
+   `docker compose up -d postgres`
+2. Configure the API environment with `DATABASE_URL=postgresql://postgres:change-this-password@localhost:5432/specialcare`, `AUTH_SECRET=change-this-to-a-long-random-secret`, and `CORS_ORIGIN=http://localhost:3000`.
+3. In terminal 1 run: `npm run db:setup`
+4. In terminal 1 run: `npm run dev:api`
+5. In terminal 2 run: `npm run dev`
+6. Open `http://localhost:3000` and sign in with the demo account created by the seed (using the password supplied through `SEED_ADMIN_PASSWORD`).
+
+Check `http://localhost:4000/health` before opening the web app. If Chrome reports `ERR_CONNECTION_REFUSED` for port 4000, the API process is not running or is not listening on that port.
+
+For Docker, set `POSTGRES_PASSWORD`, `AUTH_SECRET`, and `CORS_ORIGIN` in the environment before starting the API container. Do not use the compose development defaults in a real environment.
+
 ## Production-readiness status
 
 The repository is a strong portfolio/reference implementation, but it is **not yet a production clinical system**. The next mandatory hardening items are:
