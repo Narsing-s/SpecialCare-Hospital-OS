@@ -101,6 +101,6 @@ Set these environment variables outside source control:
 
 The seed creates the `HOSPITAL_ADMIN` role and permission mappings for the demo administrator. Change the seeded password immediately in a real environment.
 
-Password storage uses salted scrypt rather than plaintext credentials. OWASP recommends memory-hard password hashing such as Argon2id or scrypt for password storage. citeturn0search0
+Password storage uses salted scrypt rather than plaintext credentials. OWASP recommends memory-hard password hashing such as Argon2id or scrypt for password storage.
 
-For production deployment, use HTTPS and an external identity provider/SSO with MFA where available. Browser session credentials should remain HttpOnly/Secure and should not be placed in localStorage. citeturn0search2
+For production deployment, use HTTPS and an external identity provider/SSO with MFA where available. Browser session credentials should remain HttpOnly/Secure and should not be placed in localStorage.
