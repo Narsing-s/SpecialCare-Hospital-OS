@@ -50,6 +50,7 @@ app.addHook("onRequest", async (request, reply) => {
       : path.startsWith("/api/v1/audit") ? "AUDIT_READ" : null;
     if (requiredPermission && !permissions.includes(requiredPermission)) return reply.code(403).send({error:"Insufficient permission",code:"FORBIDDEN",requiredPermission});
   }
+  if (user.hospitalId && !permissions.includes("ADMIN_ALL")) { const q=request.query as Record<string,unknown>; const b=request.body as Record<string,unknown>|undefined; const requested=typeof q?.hospitalId==="string"?q.hospitalId:typeof b?.hospitalId==="string"?b.hospitalId:undefined; if(requested && requested!==user.hospitalId) return reply.code(403).send({error:"Hospital scope violation",code:"HOSPITAL_SCOPE_DENIED"}); }
   (request as any).user=user;
 });
 
