@@ -16,6 +16,9 @@ Registration → OPD/Emergency → Admission → Bed Allocation → Clinical Car
 - `/diagnostics` — Laboratory/radiology order and result workspace
 - `/pharmacy` — Prescriptions and medication administration
 - `/operations` — Emergency, ICU, Operating Theatre, Blood Bank and Ambulance command workspace
+- `/insurance` — Insurance/TPA provider directory and claims workspace
+- `/reports` — Live operational and financial reporting
+- `/audit` — Audit event review
 
 ## Hospital operations
 
@@ -42,7 +45,10 @@ The Operations workspace provides database-backed foundations for:
 - Billing and insurance foundation
 - Inventory and stock movements
 - Emergency, ICU, OT, blood bank and ambulance foundations
-- Notifications and immutable audit-trail foundation
+- Notifications, preferences and audit-event APIs
+- Insurance/TPA policies, pre-authorizations and claims
+- Nursing assignments, bedside tasks and care plans
+- Operational and financial reporting
 - Hospital command center
 
 ## Architecture
@@ -51,7 +57,7 @@ Next.js + TypeScript frontend, Fastify + TypeScript API, PostgreSQL + Prisma, ob
 
 ## Database
 
-Prisma migrations are committed under `packages/database/prisma/migrations`. The current operations migration adds EmergencyCase, ICUStay, OTCase, BloodUnit and AmbulanceTrip with indexes and foreign keys. Demo seed data includes a 5,120-bed facility hierarchy plus non-production blood-bank and ambulance records.
+Prisma migrations are committed under `packages/database/prisma/migrations`. The database includes hospital operations plus insurance/TPA, notifications, nursing assignments/tasks, care plans and audit/reporting foundations with indexes and foreign keys. Run Prisma validation/migrations after pulling the latest changes. Demo seed data includes a 5,120-bed facility hierarchy plus non-production blood-bank and ambulance records.
 
 ## Development
 
@@ -65,3 +71,19 @@ npm run dev:api
 ```
 
 > Clinical workflows, privacy/security controls and regulatory requirements must be validated by qualified healthcare, legal and security professionals before real-world deployment. The demo seed data and disabled demo clinician account are for development only.
+
+
+## Production-readiness status
+
+The repository is a strong portfolio/reference implementation, but it is **not yet a production clinical system**. The next mandatory hardening items are:
+
+- Enforce authentication on every protected API route; the current demo API is intentionally open for local development.
+- Enforce hospital/department/ward/patient scope in authorization checks.
+- Centralize and automatically emit audit events from state-changing clinical, financial and operational commands.
+- Add password hashing, session/refresh-token management, account lockout and MFA/SSO integration.
+- Replace ad-hoc request casts with centralized Fastify JSON Schema/Zod validation.
+- Add idempotency keys for payments, claims, medication administration, blood issue and other retry-sensitive commands.
+- Add comprehensive unit/API authorization/E2E tests and security/dependency scanning.
+- Add FHIR/HL7/PACS/LIS integrations, document/object storage, retention policies, backup/restore and disaster recovery controls as required by the deployment.
+
+Never use the demo credentials or seed data for a real patient environment.
