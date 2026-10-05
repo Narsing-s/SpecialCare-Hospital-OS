@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../../../apps/api/src/auth-routes.js";
 const prisma = new PrismaClient();
 async function main() {
   const hospital = await prisma.hospital.upsert({ where: { code: "SCMC" }, update: { name: "SpecialCare Medical Center" }, create: { code: "SCMC", name: "SpecialCare Medical Center" } });
@@ -6,7 +7,12 @@ async function main() {
   const departments = ["Emergency", "Cardiology", "Neurology", "General Medicine", "Orthopedics", "Pediatrics", "Radiology", "Laboratory"];
   for (const [index, name] of departments.entries()) await prisma.department.upsert({ where: { hospitalId_code: { hospitalId: hospital.id, code: `D${String(index + 1).padStart(2, "0")}` } }, update: { name }, create: { hospitalId: hospital.id, code: `D${String(index + 1).padStart(2, "0")}`, name } });
   const medicine = await prisma.department.findFirstOrThrow({ where: { hospitalId: hospital.id, code: "D04" } });
-  const user = await prisma.user.upsert({ where: { email: "demo.clinician@specialcare.local" }, update: { status: "ACTIVE", hospitalId: hospital.id }, create: { email: "demo.clinician@specialcare.local", passwordHash: "DISABLED-DEMO-ACCOUNT", hospitalId: hospital.id } });
+  const user = await prisma.user.upsert({ where: { email: "demo.clinician@specialcare.local" }, update: { status: "ACTIVE", hospitalId: hospital.id }, create: { email: "demo.clinician@specialcare.local", passwordHash: hashPassword(process.env.SEED_ADMIN_PASSWORD || "SET_SEED_ADMIN_PASSWORD"), hospitalId: hospital.id } });
+  const permissionKeys=["PATIENT_READ","PATIENT_WRITE","CLINICAL_READ","CLINICAL_WRITE","ADMISSION_READ","ADMISSION_WRITE","BILLING_READ","BILLING_WRITE","OPERATIONS_READ","OPERATIONS_WRITE","PHARMACY_READ","PHARMACY_WRITE","REPORTS_READ","AUDIT_READ","ADMIN_ALL"];
+  for(const key of permissionKeys) await prisma.permission.upsert({where:{key},update:{},create:{key}});
+  const adminRole=await prisma.role.upsert({where:{name:"HOSPITAL_ADMIN"},update:{},create:{name:"HOSPITAL_ADMIN"}});
+  for(const key of permissionKeys) { const permission=await prisma.permission.findUniqueOrThrow({where:{key}}); await prisma.rolePermission.upsert({where:{roleId_permissionId:{roleId:adminRole.id,permissionId:permission.id}},update:{},create:{roleId:adminRole.id,permissionId:permission.id}}); }
+  await prisma.userRole.upsert({where:{userId_roleId:{userId:user.id,roleId:adminRole.id}},update:{},create:{userId:user.id,roleId:adminRole.id}});
   await prisma.doctor.upsert({ where: { userId: user.id }, update: { departmentId: medicine.id }, create: { userId: user.id, departmentId: medicine.id } });
   const wardNames = ["Emergency", "ICU", "Cardiology", "Neurology", "General Medicine", "Orthopedics", "Pediatrics", "Surgical", "Recovery", "Isolation"];
   let bedNumber = 1;
