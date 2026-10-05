@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 const secret=()=>process.env.AUTH_SECRET||"specialcare-development-secret-change-me";
+const failedLogins=new Map<string,{count:number;reset:number}>();
 const b64=(v:Buffer|string)=>Buffer.from(v).toString("base64url");
 const hashPassword=(password:string,salt?:string)=>{const s=salt||randomBytes(16).toString("hex");return `scrypt$${s}$${scryptSync(password,s,64).toString("hex")}`};
 const verifyPassword=(password:string,stored:string)=>{const [,salt,hex]=stored.split("$");if(!salt||!hex)return false;const actual=scryptSync(password,salt,64);const expected=Buffer.from(hex,"hex");return actual.length===expected.length&&timingSafeEqual(actual,expected)};
@@ -12,9 +13,10 @@ export function verifyToken(token:string){try{const [h,p,s]=token.split(".");if(
 export async function registerAuthRoutes(app:FastifyInstance,prisma:PrismaClient){
   app.post("/api/v1/auth/login",async(request,reply)=>{
     const b=request.body as {email?:string;password?:string};
+    const ip=request.ip; const now=Date.now(); const attempt=failedLogins.get(ip); if(attempt&&attempt.reset>now&&attempt.count>=5)return reply.code(429).send({error:"Too many sign-in attempts. Try again later."}); if(attempt&&attempt.reset<=now)failedLogins.delete(ip);
     if(!b?.email||!b.password)return reply.code(400).send({error:"email and password are required"});
     const user=await prisma.user.findUnique({where:{email:b.email.trim().toLowerCase()},include:{roles:{include:{role:{include:{permissions:{include:{permission:true}}}}}},hospital:true}});
-    if(!user||user.status!=="ACTIVE"||!verifyPassword(b.password,user.passwordHash))return reply.code(401).send({error:"Invalid credentials"});
+    if(!user||user.status!=="ACTIVE"||!verifyPassword(b.password,user.passwordHash)){const a=failedLogins.get(ip)||{count:0,reset:now+15*60*1000};a.count++;failedLogins.set(ip,a);return reply.code(401).send({error:"Invalid credentials"});} failedLogins.delete(ip);
     const permissions=[...new Set(user.roles.flatMap(x=>x.role.permissions.map(y=>y.permission.key)))];
     const roles=user.roles.map(x=>x.role.name);
     const token=sign({sub:user.id,email:user.email,hospitalId:user.hospitalId||null,roles,permissions,exp:Math.floor(Date.now()/1000)+8*60*60});
@@ -31,6 +33,7 @@ export async function registerAuthRoutes(app:FastifyInstance,prisma:PrismaClient
     if(!user||user.status!=="ACTIVE")return reply.code(401).send({error:"User account is not active"});
     return {user:{id:user.id,email:user.email,status:user.status,hospitalId:user.hospitalId,roles:user.roles.map(x=>x.role.name),permissions:[...new Set(user.roles.flatMap(x=>x.role.permissions.map(y=>y.permission.key)))],hospital:user.hospital}};
   });
+  app.post("/api/v1/auth/change-password",async(request,reply)=>{const user=(request as any).user as {sub?:string}|undefined;const b=request.body as {currentPassword?:string;newPassword?:string};if(!user?.sub)return reply.code(401).send({error:"Authentication required"});if(!b.currentPassword||!b.newPassword||b.newPassword.length<12)return reply.code(400).send({error:"Current password and a new password of at least 12 characters are required"});const dbUser=await prisma.user.findUnique({where:{id:String(user.sub)}});if(!dbUser||!verifyPassword(b.currentPassword,dbUser.passwordHash))return reply.code(401).send({error:"Current password is incorrect"});await prisma.user.update({where:{id:dbUser.id},data:{passwordHash:hashPassword(b.newPassword)}});await prisma.auditLog.create({data:{userId:dbUser.id,action:"PASSWORD_CHANGE",entity:"User",entityId:dbUser.id}});return {ok:true};});
   app.post("/api/v1/auth/logout",async(request,reply)=>{reply.header("Set-Cookie","sc_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"); return {ok:true};});
 }
 export { hashPassword };
