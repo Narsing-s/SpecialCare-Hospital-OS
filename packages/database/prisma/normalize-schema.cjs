@@ -209,7 +209,7 @@ if (fs.existsSync(serverPath)) {
   }
   const admissionIndex = lines.findIndex((line) => line.startsWith('app.get("/api/v1/admissions/:id"'));
   if (admissionIndex >= 0) {
-    lines[admissionIndex] = 'app.get("/api/v1/admissions/:id", async (request, reply) => { const { id } = request.params as { id: string }; const admission = await prisma.admission.findUnique({ where: { id }, include: { patient: { include: { allergies: true, vitals: { orderBy: { recordedAt: "desc" }, take: 10 } } }, bed: { include: { ward: { include: { floor: { include: { building: { include: { campus: true } } } } }, room: true } } }, transfers: { orderBy: { transferredAt: "desc" } } } }); if (!admission) return reply.code(404).send({ error: "Admission not found" }); return admission; });';
+    lines[admissionIndex] = 'app.get("/api/v1/admissions/:id", async (request, reply) => { const { id } = request.params as { id: string }; const admission = await prisma.admission.findUnique({ where: { id }, include: { patient: { include: { allergies: true, vitals: { orderBy: { recordedAt: "desc" }, take: 10 } } }, bed: { include: { ward: true, room: true } }, transfers: { orderBy: { transferredAt: "desc" } } } }); if (!admission) return reply.code(404).send({ error: "Admission not found" }); return admission; });';
   }
   fs.writeFileSync(serverPath, lines.join("\n"));
 }
