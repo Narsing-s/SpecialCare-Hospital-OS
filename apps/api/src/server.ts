@@ -53,7 +53,7 @@ app.addHook("onRequest", async (request, reply) => {
   (request as any).user=user;
 });
 
-app.addHook("onResponse", async (request) => {
+app.addHook("onResponse", async (request, reply) => {
   const user=(request as any).user as {sub?:string}|undefined;
   if (!user?.sub || !request.url.startsWith("/api/v1/") || request.method==="GET" || request.method==="HEAD" || request.method==="OPTIONS") return;
   try { await prisma.auditLog.create({data:{userId:String(user.sub),action:request.method,entity:request.url.split("?")[0].split("/").slice(3,5).join("/"),entityId:(request.params as any)?.id,metadata:{requestId:request.id,statusCode:reply.statusCode}}}); } catch {}
