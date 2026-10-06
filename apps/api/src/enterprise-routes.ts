@@ -59,13 +59,19 @@ export async function registerEnterpriseRoutes(app:FastifyInstance,prisma:Prisma
   });
 
   // Notifications
-  app.get("/api/v1/notifications/:userId",async(request)=>{
+  app.get("/api/v1/notifications/:userId",async(request,reply)=>{
     const {userId}=request.params as {userId:string};
+    const actor=(request as any).user as {sub?:string;permissions?:string[]}|undefined;
+    if(!actor?.sub)return reply.code(401).send({error:"Authentication required"});
+    if(userId!==actor.sub && !actor.permissions?.includes("ADMIN_ALL"))return reply.code(403).send({error:"Cannot access another user's notifications",code:"USER_SCOPE_DENIED"});
     return {data:await prisma.notification.findMany({where:{userId},orderBy:{createdAt:"desc"},take:100})};
   });
   app.post("/api/v1/notifications",async(request,reply)=>{
     const b=request.body as {userId?:string;title?:string;body?:string;type?:string};
+    const actor=(request as any).user as {sub?:string;permissions?:string[]}|undefined;
+    if(!actor?.sub)return reply.code(401).send({error:"Authentication required"});
     if(!text(b.userId)||!text(b.title)||!text(b.body))return reply.code(400).send({error:"userId, title and body are required"});
+    if(b.userId!==actor.sub && !actor.permissions?.includes("ADMIN_ALL"))return reply.code(403).send({error:"Cannot create a notification for another user",code:"USER_SCOPE_DENIED"});
     return reply.code(201).send(await prisma.notification.create({data:{userId:b.userId!,title:b.title!.trim(),body:b.body!.trim(),type:b.type?.trim().toUpperCase()||"INFO"}}));
   });
   app.patch("/api/v1/notifications/:id/read",async(request,reply)=>{
@@ -74,6 +80,9 @@ export async function registerEnterpriseRoutes(app:FastifyInstance,prisma:Prisma
   });
   app.put("/api/v1/notifications/:userId/preferences",async(request,reply)=>{
     const {userId}=request.params as {userId:string}; const b=request.body as {channel?:string;eventType?:string;enabled?:boolean};
+    const actor=(request as any).user as {sub?:string;permissions?:string[]}|undefined;
+    if(!actor?.sub)return reply.code(401).send({error:"Authentication required"});
+    if(userId!==actor.sub && !actor.permissions?.includes("ADMIN_ALL"))return reply.code(403).send({error:"Cannot change another user's notification preferences",code:"USER_SCOPE_DENIED"});
     if(!text(b.channel)||!text(b.eventType)||typeof b.enabled!=="boolean")return reply.code(400).send({error:"channel, eventType and enabled are required"});
     return prisma.notificationPreference.upsert({where:{userId_channel_eventType:{userId,channel:b.channel!.trim().toUpperCase(),eventType:b.eventType!.trim().toUpperCase()}},update:{enabled:b.enabled},create:{userId,channel:b.channel!.trim().toUpperCase(),eventType:b.eventType!.trim().toUpperCase(),enabled:b.enabled}});
   });
