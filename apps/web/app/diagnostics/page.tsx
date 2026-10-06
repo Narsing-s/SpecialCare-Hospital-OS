@@ -1,6 +1,6 @@
 "use client";
 import { useEffect,useState } from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"/api";
 export default function Diagnostics(){const [orders,setOrders]=useState<any[]>([]);const [patients,setPatients]=useState<any[]>([]);const [patientId,setPatientId]=useState("");const [order,setOrder]=useState<any>(null);const [result,setResult]=useState("");const [status,setStatus]=useState("FINAL");
 async function load(){const [o,p]=await Promise.all([fetch(`${API}/api/v1/diagnostics/orders`).then(r=>r.json()),fetch(`${API}/api/v1/patients`).then(r=>r.json())]);setOrders(o.data||[]);setPatients(p.data||[])}useEffect(()=>{load()},[]);
 async function submit(){if(!order||!result.trim())return;await fetch(`${API}/api/v1/diagnostics/orders/${order.id}/results`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({status,result:{report:result.trim()},reportedBy:"diagnostics-team"})});setOrder(null);setResult("");load()}
