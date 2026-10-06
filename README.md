@@ -89,6 +89,12 @@ Check `http://localhost:4000/health` before opening the web app. If Chrome repor
 
 For Docker, set `POSTGRES_PASSWORD`, `AUTH_SECRET`, and `CORS_ORIGIN` in the environment before starting the API container. Do not use the compose development defaults in a real environment.
 
+For a deployed web frontend, set `HOSPITAL_API_URL` to the API origin (for example, `https://api.example.com`). The Next.js app exposes the backend through the same-origin `/api/*` proxy, so browser requests do not need a separate API origin. Keep `AUTH_SECRET` and database credentials only in the API environment; never expose them as `NEXT_PUBLIC_*` variables.
+
+## Recent hardening
+
+The production-hardening branch now adds fail-fast checks for missing production `AUTH_SECRET`/`CORS_ORIGIN`, restricts facility-configuration endpoints to `ADMIN_ALL`, prevents users from reading or changing another user's notifications/preferences, and uses a same-origin Next.js API proxy by default. These controls reduce accidental cross-tenant and browser-configuration exposure, but they do not replace a formal clinical/security assessment.
+
 ## Production-readiness status
 
 The repository is a strong portfolio/reference implementation, but it is **not yet a production clinical system**. The next mandatory hardening items are:

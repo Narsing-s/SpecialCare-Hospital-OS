@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 type Bed={id:string;number:string;status:string;room?:{id:string;number:string;name?:string}};
 type Ward={id:string;name:string;rooms:Room[];beds:Bed[]};
 type Room={id:string;number:string;name?:string;beds:Bed[]};

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 type Patient = { id: string; mrn: string; firstName: string; lastName: string };
 type Doctor = { id: string; user?: { email?: string }; department: { id: string; name: string; code: string } };
 type Appointment = { id: string; scheduledAt: string; status: string; patient: Patient; doctor: Doctor; department: { id: string; name: string; code: string } };

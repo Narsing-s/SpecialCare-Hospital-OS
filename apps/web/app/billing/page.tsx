@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"/api";
 type Patient={id:string;mrn:string;firstName:string;lastName:string}; type Invoice={id:string;status:string;total:string|number;patient:Patient;items:{description:string;quantity:number;unitPrice:string|number;total:string|number}[];payments:{amount:string|number;method:string;paidAt:string}[]};
 export default function Billing(){const [patients,setPatients]=useState<Patient[]>([]),[invoices,setInvoices]=useState<Invoice[]>([]),[patientId,setPatientId]=useState(""),[description,setDescription]=useState("Consultation"),[price,setPrice]=useState("500"),[message,setMessage]=useState("");
 const load=()=>{fetch(`${API}/api/v1/patients`).then(r=>r.json()).then(x=>setPatients(x.data||[]));fetch(`${API}/api/v1/billing/invoices`).then(r=>r.json()).then(x=>setInvoices(x.data||[]))}; useEffect(load,[]);
