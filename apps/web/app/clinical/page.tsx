@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"/api";
 type Patient={id:string;mrn:string;firstName:string;lastName:string;admissions:{id:string;status:string;admittedAt:string;bed:{number:string;ward:{name:string};room?:{number:string}}}[];allergies:{id:string;substance:string;reaction?:string}[];vitals:{id:string;recordedAt:string;temperature?:string;heartRate?:number;respiratoryRate?:number;systolic?:number;diastolic?:number;spo2?:string}[];appointments:{id:string;scheduledAt:string;status:string;department:{name:string}}[]};
 export default function Clinical(){const[patients,setPatients]=useState<Patient[]>([]),[search,setSearch]=useState(""),[selected,setSelected]=useState<Patient|null>(null),[notice,setNotice]=useState(""),[loading,setLoading]=useState(false);
 const load=async()=>{setLoading(true);try{const r=await fetch(`${API}/api/v1/patients${search?`?search=${encodeURIComponent(search)}`:""}`);if(!r.ok)throw new Error();const list=(await r.json()).data||[];const detailed=await Promise.all(list.slice(0,40).map(async(p:Patient)=>{const x=await fetch(`${API}/api/v1/patients/${p.id}`);return x.ok?await x.json():p}));setPatients(detailed)}catch{setNotice("Hospital API unavailable")}finally{setLoading(false)}};
