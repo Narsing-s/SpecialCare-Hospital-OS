@@ -1,5 +1,5 @@
 "use client";
 import {useEffect} from "react";
 import {usePathname,useRouter} from "next/navigation";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"/api";
 export default function AuthGate({children}:{children:React.ReactNode}){const path=usePathname();const router=useRouter();useEffect(()=>{if(path==="/login")return;const original=window.fetch.bind(window);original(API+"/api/v1/auth/me",{credentials:"include"}).then(r=>{if(!r.ok)throw new Error("unauthorized")}).catch(()=>router.replace("/login"));window.fetch=async(input:RequestInfo|URL,init?:RequestInit)=>{const headers=new Headers(init?.headers);const response=await original(input,{...init,headers,credentials:"include"});if(response.status===401&&path!=="/login")router.replace("/login");return response};return()=>{window.fetch=original}},[path,router]);return <>{children}</>}
