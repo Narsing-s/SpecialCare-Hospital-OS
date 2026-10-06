@@ -2,7 +2,12 @@ import type { FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
-const secret=()=>process.env.AUTH_SECRET||"specialcare-development-secret-change-me";
+const secret=()=>{
+  const value=process.env.AUTH_SECRET?.trim();
+  if(value)return value;
+  if(process.env.NODE_ENV==="production") throw new Error("AUTH_SECRET must be configured in production");
+  return "specialcare-development-secret-change-me";
+};
 const failedLogins=new Map<string,{count:number;reset:number}>();
 const b64=(v:Buffer|string)=>Buffer.from(v).toString("base64url");
 const hashPassword=(password:string,salt?:string)=>{const s=salt||randomBytes(16).toString("hex");return `scrypt$${s}$${scryptSync(password,s,64).toString("hex")}`};
@@ -19,7 +24,7 @@ export async function registerAuthRoutes(app:FastifyInstance,prisma:PrismaClient
     if(!user||user.status!=="ACTIVE"||!verifyPassword(b.password,user.passwordHash)){const a=failedLogins.get(ip)||{count:0,reset:now+15*60*1000};a.count++;failedLogins.set(ip,a);return reply.code(401).send({error:"Invalid credentials"});} failedLogins.delete(ip);
     const permissions=[...new Set(user.roles.flatMap(x=>x.role.permissions.map(y=>y.permission.key)))];
     const roles=user.roles.map(x=>x.role.name);
-    const token=sign({sub:user.id,email:user.email,hospitalId:user.hospitalId||null,roles,permissions,exp:Math.floor(Date.now()/1000)+8*60*60});
+    const token=sign({sub:user.id,email:user.email,hospitalId:user.hospitalId||null,roles,permissions,iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+8*60*60});
     const secure=process.env.NODE_ENV==="production";
     reply.header("Set-Cookie",`sc_session=${token}; Path=/; HttpOnly; SameSite=${secure?"None":"Lax"}${secure?"; Secure":""}; Max-Age=28800`);
     await prisma.auditLog.create({data:{userId:user.id,action:"LOGIN",entity:"User",entityId:user.id,metadata:{roles}}});
