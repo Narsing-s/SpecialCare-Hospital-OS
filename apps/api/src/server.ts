@@ -40,14 +40,16 @@ app.addHook("onRequest", async (request, reply) => {
   if (!user?.sub) return reply.code(401).send({error:"Invalid or expired session",code:"SESSION_EXPIRED"});
   const permissions=Array.isArray(user.permissions)?user.permissions.map(String):[];
   if (!permissions.includes("ADMIN_ALL")) {
-    const requiredPermission = path.startsWith("/api/v1/patients") ? (request.method==="GET" ? "PATIENT_READ" : "PATIENT_WRITE")
+    const requiredPermission = path.startsWith("/api/v1/hospitals") || path.startsWith("/api/v1/campuses") || path.startsWith("/api/v1/buildings") || path.startsWith("/api/v1/floors") || path.startsWith("/api/v1/wards") || path.startsWith("/api/v1/rooms") ? "ADMIN_ALL"
+      : path.startsWith("/api/v1/auth/") ? null
+      : path.startsWith("/api/v1/patients") ? (request.method==="GET" ? "PATIENT_READ" : "PATIENT_WRITE")
       : path.startsWith("/api/v1/clinical") || path.startsWith("/api/v1/encounters") || path.startsWith("/api/v1/vitals") ? (request.method==="GET" ? "CLINICAL_READ" : "CLINICAL_WRITE")
       : path.startsWith("/api/v1/admissions") || path.startsWith("/api/v1/beds") ? (request.method==="GET" ? "ADMISSION_READ" : "ADMISSION_WRITE")
       : path.startsWith("/api/v1/billing") || path.startsWith("/api/v1/invoices") || path.startsWith("/api/v1/payments") ? (request.method==="GET" ? "BILLING_READ" : "BILLING_WRITE")
       : path.startsWith("/api/v1/operations") || path.startsWith("/api/v1/emergency") || path.startsWith("/api/v1/icu") || path.startsWith("/api/v1/ot") || path.startsWith("/api/v1/blood-bank") || path.startsWith("/api/v1/ambulances") ? (request.method==="GET" ? "OPERATIONS_READ" : "OPERATIONS_WRITE")
       : path.startsWith("/api/v1/pharmacy") || path.startsWith("/api/v1/prescriptions") ? (request.method==="GET" ? "PHARMACY_READ" : "PHARMACY_WRITE")
       : path.startsWith("/api/v1/reports") || path.startsWith("/api/v1/dashboard") ? "REPORTS_READ"
-      : path.startsWith("/api/v1/audit") ? "AUDIT_READ" : null;
+      : path.startsWith("/api/v1/audit") ? "AUDIT_READ" : "ADMIN_ALL";
     if (requiredPermission && !permissions.includes(requiredPermission)) return reply.code(403).send({error:"Insufficient permission",code:"FORBIDDEN",requiredPermission});
   }
   if (user.hospitalId && !permissions.includes("ADMIN_ALL")) { const q=request.query as Record<string,unknown>; const b=request.body as Record<string,unknown>|undefined; const requested=typeof q?.hospitalId==="string"?q.hospitalId:typeof b?.hospitalId==="string"?b.hospitalId:undefined; if(requested && requested!==user.hospitalId) return reply.code(403).send({error:"Hospital scope violation",code:"HOSPITAL_SCOPE_DENIED"}); }
@@ -85,7 +87,10 @@ app.post("/api/v1/admissions/:id/transfer", async (request, reply) => { const { 
 app.post("/api/v1/admissions/:id/discharge", async (request, reply) => { const { id } = request.params as { id: string }; try { return await prisma.$transaction(async tx => { const admission = await tx.admission.findUnique({ where: { id } }); if (!admission || admission.status !== "ACTIVE") throw new Error(); await tx.bed.update({ where: { id: admission.bedId }, data: { status: "CLEANING" } }); return tx.admission.update({ where: { id }, data: { status: "DISCHARGED", dischargedAt: new Date() } }); }); } catch { return reply.code(404).send({ error: "Active admission not found" }); } });
 
 async function start() {
-  await app.register(cors, { origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",").map(x=>x.trim()) : ["http://localhost:3000"], credentials: true });
+  const corsOrigins=process.env.CORS_ORIGIN?.split(",").map(x=>x.trim()).filter(Boolean);
+  if(process.env.NODE_ENV==="production" && !corsOrigins?.length) throw new Error("CORS_ORIGIN must be configured in production");
+  if(process.env.NODE_ENV==="production" && !process.env.AUTH_SECRET?.trim()) throw new Error("AUTH_SECRET must be configured in production");
+  await app.register(cors, { origin: corsOrigins?.length ? corsOrigins : ["http://localhost:3000"], credentials: true });
   await registerAuthRoutes(app, prisma);
   await registerClinicalCareRoutes(app, prisma);
   await registerDiagnosticsPharmacyRoutes(app, prisma);
