@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"/api";
 export default function Insurance(){const[providers,setProviders]=useState<any[]>([]);const[claims,setClaims]=useState<any[]>([]);const[form,setForm]=useState({hospitalId:"",name:"",code:""});const[notice,setNotice]=useState("");
 async function load(){try{const[p,c]=await Promise.all([fetch(API+"/api/v1/insurance/providers"),fetch(API+"/api/v1/insurance/claims")]);setProviders((await p.json()).data||[]);setClaims((await c.json()).data||[])}catch{setNotice("Insurance API unavailable")}}
 useEffect(()=>{load()},[]);
