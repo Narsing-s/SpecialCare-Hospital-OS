@@ -109,7 +109,7 @@ app.addHook("onResponse", async (request, reply) => {
         action:auditAction(request.method,path,status),
         entity:path.split("/").slice(3,5).join("/")||"system",
         entityId:(request.params as any)?.id,
-        metadata
+        metadata: metadata as any
       }
     });
   } catch (error) {
