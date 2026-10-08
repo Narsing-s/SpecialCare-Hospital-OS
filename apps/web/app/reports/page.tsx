@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"";
 type Report={generatedAt:string;patients:number;activeAdmissions:number;beds:{total:number;occupied:number;available:number;occupancyRate:number};emergencyActive:number;icuActive:number;otScheduled:number;bloodAvailable:number;ambulancesAvailable:number;openInvoices:number;paymentsReceived:string|number;diagnosticPending:number};
 export default function Reports(){const[data,setData]=useState<Report|null>(null);const[financial,setFinancial]=useState<any>(null);const[error,setError]=useState("");
 async function load(){try{const[a,b]=await Promise.all([fetch(API+"/api/v1/reports/operational"),fetch(API+"/api/v1/reports/financial")]);if(!a.ok||!b.ok)throw new Error("Report API unavailable");setData(await a.json());setFinancial(await b.json())}catch(e){setError(e instanceof Error?e.message:"Could not load reports")}}
