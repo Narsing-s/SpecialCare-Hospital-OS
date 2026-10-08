@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"";
 type P={id:string;mrn:string;firstName:string;lastName:string};
 type D={id:string;user:{email:string};department:{name:string}};
 export default function Operations(){const[tab,setTab]=useState("Emergency"),[patients,setPatients]=useState<P[]>([]),[doctors,setDoctors]=useState<D[]>([]),[hospital,setHospital]=useState(""),[data,setData]=useState<any[]>([]),[msg,setMsg]=useState(""),[busy,setBusy]=useState(false),[form,setForm]=useState<any>({patientId:"",doctorId:"",triageLevel:"3",chiefComplaint:"",bedLabel:"",acuity:"CRITICAL",procedure:"",scheduledAt:"",theatre:"",bloodGroup:"O+",component:"RED_CELLS",donationCode:"",expiresAt:"",vehicleCode:"AMB-01",driverName:"",pickupLocation:"",destination:"",hospitalId:""});
