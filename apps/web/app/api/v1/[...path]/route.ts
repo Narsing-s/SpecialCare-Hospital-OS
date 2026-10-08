@@ -1,0 +1,64 @@
+import { NextRequest, NextResponse } from "next/server";
+
+type Patient = {
+  id:string; mrn:string; firstName:string; lastName:string; phone:string; email:string;
+  admissions?: {id:string; bed:{number:string; ward:{name:string}; room?:{number:string}}}[];
+};
+
+const wards=["Emergency","ICU","Cardiology","Neurology","General Medicine","Orthopedics","Pediatrics","Surgical"];
+const patients:Patient[]=Array.from({length:32},(_,i)=>{
+  const n=i+1;
+  const admitted=n%3===0;
+  const bedNumber=`B${String(n).padStart(4,"0")}`;
+  return {
+    id:`demo-patient-${n}`, mrn:`SCMC-${String(100000+n)}`,
+    firstName:["Aarav","Ananya","Rahul","Priya","Vikram","Kavya","Arjun","Meera"][i%8],
+    lastName:["Sharma","Reddy","Patel","Kumar","Rao","Iyer","Singh","Naidu"][i%8],
+    phone:`+91 98${String(10000000+n).slice(-8)}`,
+    email:`patient${n}@demo.specialcare.local`,
+    admissions:admitted?[{id:`demo-admission-${n}`,bed:{number:bedNumber,ward:{name:wards[i%wards.length]},room:{number:`R-${String(i%16+1).padStart(2,"0")}`}}}]:[]
+  };
+});
+
+const beds=Array.from({length:128},(_,i)=>{
+  const n=i+1; const occupied=n%3===0; const cleaning=n%11===0 && !occupied;
+  return {id:`demo-bed-${n}`,number:`B${String(n).padStart(4,"0")}`,status:occupied?"OCCUPIED":cleaning?"CLEANING":"AVAILABLE",
+    ward:{name:wards[i%wards.length],floor:{name:`Floor ${i%4+1}`,building:{name:`Building ${i%2+1}`,campus:{name:"Main Campus"}}}},
+    room:{number:`R-${String(i%16+1).padStart(2,"0")}`,name:`${wards[i%wards.length]} Room ${i%16+1}`}
+  };
+});
+
+const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"Cache-Control":"no-store"}});
+export async function GET(req:NextRequest,{params}:{params:Promise<{path:string[]}>}) {
+  const {path}=await params; const key="/"+path.join("/");
+  if(key==="/auth/me") return json({authenticated:true,user:{id:"demo-admin",email:"demo.admin@specialcare.local",name:"System Admin",roles:["HOSPITAL_ADMIN"]}});
+  if(key==="/patients") {
+    const q=req.nextUrl.searchParams.get("search")?.toLowerCase().trim();
+    return json({data:q?patients.filter(p=>`${p.mrn} ${p.firstName} ${p.lastName} ${p.phone}`.toLowerCase().includes(q)):patients});
+  }
+  if(key==="/beds") return json({data:beds});
+  if(key==="/dashboard/summary") return json({beds:{total:beds.length,occupied:beds.filter(b=>b.status==="OCCUPIED").length,available:beds.filter(b=>b.status==="AVAILABLE").length,cleaning:beds.filter(b=>b.status==="CLEANING").length},patients:{total:patients.length},admissions:{active:patients.filter(p=>p.admissions?.length).length},emergency:{activePatients:6},lab:{pendingReports:11}});
+  if(key==="/hospitals") return json({data:[{id:"demo-hospital",code:"SCMC",name:"SpecialCare Medical Center"}]});
+  if(key==="/admissions") return json({data:patients.filter(p=>p.admissions?.length).map(p=>({id:p.admissions![0].id,status:"ACTIVE",patient:p,bed:p.admissions![0].bed}))});
+  if(key==="/appointments") return json({data:patients.slice(0,12).map((p,i)=>({id:`demo-appt-${i+1}`,patient:p,status:i%3===0?"SCHEDULED":"CONFIRMED",scheduledAt:new Date(Date.now()+(i+1)*86400000).toISOString(),department:{name:wards[i%wards.length]}}))});
+  if(key==="/doctors") return json({data:["Dr. Anil Rao","Dr. Priya Sharma","Dr. Kiran Reddy","Dr. Meera Iyer"].map((name,i)=>({id:`demo-doctor-${i+1}`,name,department:{name:wards[i%wards.length]}}))});
+  if(key==="/diagnostics/orders") return json({data:patients.slice(0,10).map((p,i)=>({id:`demo-lab-${i+1}`,patient:p,status:i%2?"PENDING":"COMPLETED",testName:["CBC","LFT","MRI","X-Ray"][i%4]}))});
+  if(key==="/prescriptions") return json({data:patients.slice(0,8).map((p,i)=>({id:`demo-rx-${i+1}`,patient:p,medicine:["Paracetamol","Amoxicillin","Metformin","Atorvastatin"][i%4],status:"ACTIVE"}))});
+  if(key==="/inventory/items") return json({data:["Surgical Gloves","IV Fluids","Syringes","Antibiotics","Masks","Bandages"].map((name,i)=>({id:`demo-item-${i+1}`,name,quantity:100-i*7,reorderLevel:25,status:"AVAILABLE"}))});
+  if(key==="/operations/summary") return json({emergency:12,icu:18,ot:5,bloodBank:27,ambulances:2});
+  if(key==="/emergency") return json({data:patients.slice(0,6).map((p,i)=>({id:`demo-emergency-${i+1}`,patient:p,triage:["CRITICAL","URGENT","STABLE"][i%3],status:"ACTIVE"}))});
+  if(key==="/icu") return json({data:beds.filter(b=>b.ward.name==="ICU").slice(0,12)});
+  if(key==="/ot") return json({data:["OT-01","OT-02","OT-03"].map((theatre,i)=>({id:`demo-ot-${i+1}`,theatre,status:i===1?"IN_USE":"AVAILABLE"}))});
+  if(key==="/blood-bank") return json({data:["A+","B+","O+","O-","AB+"].map((bloodGroup,i)=>({bloodGroup,component:"RED_CELLS",available:8+i*3,status:"AVAILABLE"}))});
+  if(key==="/ambulances") return json({data:[1,2].map(i=>({id:`demo-amb-${i}`,vehicleCode:`AMB-0${i}`,driverName:`Demo Driver 0${i}`,status:"AVAILABLE"}))});
+  if(key==="/hierarchy") return json({id:"demo-hospital",code:"SCMC",name:"SpecialCare Medical Center",campuses:[{name:"Main Campus",buildings:[]}]});
+  if(key.startsWith("/patients/")) { const id=key.split("/")[2]; const p=patients.find(x=>x.id===id); return p?json(p):json({error:"Patient not found"},404); }
+  return json({data:[]});
+}
+export async function POST(req:NextRequest,{params}:{params:Promise<{path:string[]}>}) {
+  const {path}=await params; const key="/"+path.join("/");
+  if(key==="/auth/login") return json({authenticated:true,user:{id:"demo-admin",email:"demo.admin@specialcare.local",name:"System Admin",roles:["HOSPITAL_ADMIN"]}});
+  if(key==="/patients") { const b=await req.json(); const p={id:`demo-patient-${Date.now()}`,mrn:`SCMC-${100000+patients.length+1}`,firstName:b.firstName||"Demo",lastName:b.lastName||"Patient",phone:b.phone||"",email:b.email||"",admissions:[]}; return json(p,201); }
+  if(key.startsWith("/admissions")) return json({id:`demo-admission-${Date.now()}`,status:"ACTIVE"},201);
+  return json({ok:true});
+}
