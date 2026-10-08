@@ -141,9 +141,32 @@ export async function registerEnterpriseRoutes(app:FastifyInstance,prisma:Prisma
 
   // Audit trail
   app.get("/api/v1/audit",async(request)=>{
-    const q=request.query as {entity?:string;entityId?:string;userId?:string;limit?:string};
-    const take=Math.min(Math.max(Number(q.limit)||100,1),500);
-    return {data:await prisma.auditLog.findMany({where:{...(q.entity?{entity:q.entity}:{}),...(q.entityId?{entityId:q.entityId}:{}),...(q.userId?{userId:q.userId}: {})},include:{user:{select:{id:true,email:true}}},orderBy:{createdAt:"desc"},take})};
+    const q=request.query as {entity?:string;entityId?:string;userId?:string;limit?:string;search?:string;module?:string;status?:string};
+    const take=Math.min(Math.max(Number(q.limit)||100,1),1000);
+    const rows=await prisma.auditLog.findMany({
+      where:{
+        ...(q.entity?{entity:{equals:q.entity,mode:"insensitive"}}:{}),
+        ...(q.entityId?{entityId:q.entityId}:{}),
+        ...(q.userId?{userId:q.userId}: {})
+      },
+      include:{user:{select:{id:true,email:true,roles:{include:{role:{select:{name:true}}}}}}},
+      orderBy:{createdAt:"desc"},take
+    });
+    const data=rows.map(row=>{
+      const m=(row.metadata&&typeof row.metadata==="object"?row.metadata:{}) as Record<string,any>;
+      const method=String(m.method||"");
+      const path=String(m.path||"");
+      const status=String(m.status||((Number(m.statusCode)>=200&&Number(m.statusCode)<400)?"SUCCESS":"FAILED"));
+      const module=String(m.module||row.entity||"System");
+      const event={id:row.id,createdAt:row.createdAt.toISOString(),action:row.action,entity:row.entity,entityId:row.entityId,
+        user:row.user?{id:row.user.id,email:row.user.email,name:row.user.email,roles:row.user.roles.map(x=>x.role.name)}:undefined,
+        status,requestId:m.requestId,method,path,module,reason:m.reason,before:m.before,after:m.after??m.requestBody,metadata:m};
+      return event;
+    }).filter(x=>{
+      const hay=JSON.stringify(x).toLowerCase();
+      return (!q.search||hay.includes(q.search.toLowerCase())) && (!q.module||x.module.toLowerCase()===q.module.toLowerCase()) && (!q.status||x.status===q.status.toUpperCase());
+    });
+    return {data};
   });
   app.post("/api/v1/audit",async(request,reply)=>{
     const b=request.body as {userId?:string;action?:string;entity?:string;entityId?:string;metadata?:unknown};
