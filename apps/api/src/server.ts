@@ -54,10 +54,67 @@ app.addHook("onRequest", async (request, reply) => {
   (request as any).user=user;
 });
 
+function auditValue(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  const seen = new WeakSet<object>();
+  const redact = (v: unknown): unknown => {
+    if (v === null || typeof v !== "object") return v;
+    if (seen.has(v as object)) return "[Circular]";
+    seen.add(v as object);
+    if (Array.isArray(v)) return v.slice(0,100).map(redact);
+    const out: Record<string,unknown> = {};
+    for (const [k,val] of Object.entries(v as Record<string,unknown>)) {
+      if (/password|token|secret|authorization|cookie/i.test(k)) out[k]="[REDACTED]";
+      else out[k]=redact(val);
+    }
+    return out;
+  };
+  const result=redact(value);
+  const serialized=JSON.stringify(result);
+  return serialized && serialized.length>20000 ? `${serialized.slice(0,20000)}…[TRUNCATED]` : result;
+}
+function auditAction(method:string,path:string,status:number){
+  const clean=path.split("?")[0];
+  const leaf=clean.split("/").filter(Boolean).pop()||"REQUEST";
+  if(method==="POST" && /login$/.test(clean)) return "LOGIN";
+  if(method==="POST" && /logout$/.test(clean)) return "LOGOUT";
+  if(method==="POST" && /discharge$/.test(clean)) return "DISCHARGE";
+  if(method==="POST" && /transfer$/.test(clean)) return "TRANSFER";
+  if(method==="POST" && /clean$/.test(clean)) return "CLEAN";
+  if(method==="POST") return "CREATE";
+  if(method==="PATCH" || method==="PUT") return "UPDATE";
+  if(method==="DELETE") return "DELETE";
+  return method;
+}
 app.addHook("onResponse", async (request, reply) => {
+  if (!request.url.startsWith("/api/v1/") || ["GET","HEAD","OPTIONS"].includes(request.method)) return;
   const user=(request as any).user as {sub?:string}|undefined;
-  if (!user?.sub || !request.url.startsWith("/api/v1/") || request.method==="GET" || request.method==="HEAD" || request.method==="OPTIONS") return;
-  try { await prisma.auditLog.create({data:{userId:String(user.sub),action:request.method,entity:request.url.split("?")[0].split("/").slice(3,5).join("/"),entityId:(request.params as any)?.id,metadata:{requestId:request.id,statusCode:reply.statusCode}}}); } catch {}
+  const path=request.url.split("?")[0];
+  const status=reply.statusCode;
+  const metadata={
+    requestId: typeof request.headers["x-request-id"]==="string" ? request.headers["x-request-id"] : request.id,
+    method:request.method,
+    path,
+    statusCode:status,
+    status:status>=200 && status<400 ? "SUCCESS" : "FAILED",
+    module:path.split("/")[3]||"system",
+    ip:request.ip,
+    userAgent:request.headers["user-agent"]||undefined,
+    requestBody:auditValue(request.body)
+  };
+  try {
+    await prisma.auditLog.create({
+      data:{
+        userId:user?.sub ? String(user.sub) : undefined,
+        action:auditAction(request.method,path,status),
+        entity:path.split("/").slice(3,5).join("/")||"system",
+        entityId:(request.params as any)?.id,
+        metadata
+      }
+    });
+  } catch (error) {
+    request.log.warn({error},"audit log write failed");
+  }
 });
 
 app.get("/health", async () => ({ status: "ok", service: "SpecialCare Hospital API", version: "0.9.0" }));
