@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"";
 type Admission={id:string;status:string;admittedAt:string;dischargedAt?:string;patient:{id:string;mrn:string;firstName:string;lastName:string};bed:{id:string;number:string;ward:{name:string;floor:{name:string;building:{name:string;campus:{name:string}}}};room?:{number:string;name?:string}};transfers:{id:string;fromBedId?:string;toBedId:string;transferredAt:string}[]};
 type Bed={id:string;number:string;status:string;ward:{name:string};room?:{number:string;name?:string}};
 type Timeline={type:string;at:string;title:string;detail?:string;id:string};
