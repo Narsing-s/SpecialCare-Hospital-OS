@@ -28,6 +28,11 @@ const beds=Array.from({length:128},(_,i)=>{
   };
 });
 
+type AuditEvent={id:string;createdAt:string;action:string;entity:string;entityId?:string;user:{id:string;email:string;name:string;roles:string[]};status:"SUCCESS"|"FAILED";requestId:string;method:string;path:string;module:string;reason?:string;before?:unknown;after?:unknown};
+const auditEvents:AuditEvent[]=[];
+const actor={id:"demo-admin",email:"demo.admin@specialcare.local",name:"System Admin",roles:["HOSPITAL_ADMIN"]};
+const requestId=()=>`REQ-${Date.now()}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
+const recordAudit=(e:Omit<AuditEvent,"id"|"createdAt"|"user"|"requestId">)=>{const event={...e,id:`audit-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,createdAt:new Date().toISOString(),user:actor,requestId:requestId()};auditEvents.unshift(event);if(auditEvents.length>1000)auditEvents.length=1000;return event};
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"Cache-Control":"no-store"}});
 export async function GET(req:NextRequest,{params}:{params:Promise<{path:string[]}>}) {
   const {path}=await params; const key="/"+path.join("/");
@@ -54,16 +59,39 @@ export async function GET(req:NextRequest,{params}:{params:Promise<{path:string[
   if(key==="/hierarchy") return json({id:"demo-hospital",code:"SCMC",name:"SpecialCare Medical Center",campuses:[{id:"campus-1",name:"Main Campus",buildings:[{id:"building-1",name:"Building 1",floors:[{id:"floor-1",name:"Floor 1",wards:wards.map((name,i)=>({id:`ward-${i+1}`,name,rooms:[{id:`room-${i+1}`,number:`R-${String(i%16+1).padStart(2,"0")}`,name:`${name} Room ${i%16+1}`,beds:beds.filter(b=>b.ward.name===name).slice(0,16)}],beds:beds.filter(b=>b.ward.name===name)}))}]}]}]});
   if(key==="/reports/operational") return json({generatedAt:new Date().toISOString(),patients:patients.length,activeAdmissions:patients.filter(p=>p.admissions?.length).length,beds:{total:beds.length,occupied:beds.filter(b=>b.status==="OCCUPIED").length,available:beds.filter(b=>b.status==="AVAILABLE").length,occupancyRate:Math.round(beds.filter(b=>b.status==="OCCUPIED").length/beds.length*100)},emergencyActive:6,icuActive:4,otScheduled:3,bloodAvailable:27,ambulancesAvailable:2,openInvoices:5,paymentsReceived:125000,diagnosticPending:11});
   if(key==="/reports/financial") return json({payments:{_sum:{amount:125000}},invoices:{_count:{_all:5}},claims:[]});
-  if(key.startsWith("/audit")) return json({data:[{id:"audit-demo-1",createdAt:new Date().toISOString(),action:"SYSTEM_READY",entity:"Hospital",entityId:"demo-hospital",user:{email:"demo.admin@specialcare.local"}}]});
+  if(key.startsWith("/audit")) {
+    if(!auditEvents.length) recordAudit({action:"SYSTEM_READY",entity:"Hospital",entityId:"demo-hospital",status:"SUCCESS",method:"SYSTEM",path:"/api/v1/audit",module:"System"});
+    const q=req.nextUrl.searchParams.get("search")?.toLowerCase().trim();
+    const module=req.nextUrl.searchParams.get("module")?.toLowerCase().trim();
+    const status=req.nextUrl.searchParams.get("status")?.toUpperCase();
+    let data=[...auditEvents];
+    if(q)data=data.filter(x=>JSON.stringify(x).toLowerCase().includes(q));
+    if(module)data=data.filter(x=>x.module.toLowerCase()===module);
+    if(status)data=data.filter(x=>x.status===status);
+    return json({data:data.slice(0,Math.min(Number(req.nextUrl.searchParams.get("limit")||200),1000))});
+  }
   if(key.startsWith("/patients/")) { const parts=key.split("/"); const id=parts[2]; const p=patients.find(x=>x.id===id); if(!p)return json({error:"Patient not found"},404); if(parts[3]==="timeline")return json({data:[{id:`timeline-${id}-1`,type:"REGISTRATION",at:new Date().toISOString(),title:"Patient registered",detail:"SpecialCare hospital record"}]}); return json({...p,allergies:[],vitals:[],appointments:[]}); }
   return json({data:[]});
 }
 export async function POST(req:NextRequest,{params}:{params:Promise<{path:string[]}>}) {
   const {path}=await params; const key="/"+path.join("/");
   if(key==="/auth/login") return json({authenticated:true,user:{id:"demo-admin",email:"demo.admin@specialcare.local",name:"System Admin",roles:["HOSPITAL_ADMIN"]}});
-  if(key==="/patients") { const b=await req.json(); const p={id:`demo-patient-${Date.now()}`,mrn:`SCMC-${100000+patients.length+1}`,firstName:b.firstName||"Demo",lastName:b.lastName||"Patient",phone:b.phone||"",email:b.email||"",admissions:[]}; patients.unshift(p); return json(p,201); }
-  if(key==="/admissions") { const b=await req.json(); const p=patients.find(x=>x.id===b.patientId); const bed=beds.find(x=>x.id===b.bedId); if(!p||!bed)return json({error:"Patient or bed not found"},404); if(bed.status!=="AVAILABLE")return json({error:"Bed is not available"},409); const admission={id:`demo-admission-${Date.now()}`,status:"ACTIVE",patient:p,bed:{id:bed.id,number:bed.number,ward:bed.ward,room:bed.room},transfers:[]}; p.admissions=[{id:admission.id,bed:{number:bed.number,ward:{name:bed.ward.name},room:bed.room}}]; bed.status="OCCUPIED"; return json(admission,201); }
-  if(key.match(/^\/admissions\/[^/]+\/discharge$/)) { const id=key.split("/")[2]; const p=patients.find(x=>x.admissions?.some(a=>a.id===id)); if(!p)return json({error:"Admission not found"},404); const a=p.admissions![0]; const bed=beds.find(x=>x.number===a.bed.number); if(bed)bed.status="CLEANING"; p.admissions=[]; return json({id,status:"DISCHARGED"},200); }
-  if(key.match(/^\/admissions\/[^/]+\/transfer$/)) { const id=key.split("/")[2]; const b=await req.json(); const p=patients.find(x=>x.admissions?.some(a=>a.id===id)); const to=beds.find(x=>x.id===b.toBedId); if(!p||!to)return json({error:"Admission or destination bed not found"},404); if(to.status!=="AVAILABLE")return json({error:"Destination bed is not available"},409); const old=p.admissions![0]; const oldBed=beds.find(x=>x.number===old.bed.number); if(oldBed)oldBed.status="CLEANING"; to.status="OCCUPIED"; old.bed={number:to.number,ward:{name:to.ward.name},room:to.room}; return json({id,status:"TRANSFERRED",bed:to},200); }
-  return json({ok:true});
+  if(key==="/patients") { const b=await req.json(); const p={id:`demo-patient-${Date.now()}`,mrn:`SCMC-${100000+patients.length+1}`,firstName:b.firstName||"Demo",lastName:b.lastName||"Patient",phone:b.phone||"",email:b.email||"",admissions:[]}; patients.unshift(p); const e=recordAudit({action:"CREATE",entity:"Patient",entityId:p.id,status:"SUCCESS",method:"POST",path:key,module:"Patients",after:p}); return json({...p,requestId:e.requestId,auditId:e.id},201); }
+  if(key==="/admissions") { const b=await req.json(); const p=patients.find(x=>x.id===b.patientId); const bed=beds.find(x=>x.id===b.bedId); if(!p||!bed){recordAudit({action:"CREATE",entity:"Admission",status:"FAILED",method:"POST",path:key,module:"Admissions",reason:"Patient or bed not found"});return json({error:"Patient or bed not found"},404);} if(bed.status!=="AVAILABLE"){recordAudit({action:"CREATE",entity:"Admission",entityId:b.patientId,status:"FAILED",method:"POST",path:key,module:"Admissions",reason:"Bed is not available"});return json({error:"Bed is not available"},409);} const admission={id:`demo-admission-${Date.now()}`,status:"ACTIVE",patient:p,bed:{id:bed.id,number:bed.number,ward:bed.ward,room:bed.room},transfers:[]}; p.admissions=[{id:admission.id,bed:{number:bed.number,ward:{name:bed.ward.name},room:bed.room}}]; bed.status="OCCUPIED"; const e=recordAudit({action:"ADMIT",entity:"Admission",entityId:admission.id,status:"SUCCESS",method:"POST",path:key,module:"Admissions",after:{patientId:p.id,bedId:bed.id}}); return json({...admission,requestId:e.requestId,auditId:e.id},201); }
+  if(key.match(/^\/admissions\/[^/]+\/discharge$/)) { const id=key.split("/")[2]; const p=patients.find(x=>x.admissions?.some(a=>a.id===id)); if(!p){recordAudit({action:"DISCHARGE",entity:"Admission",entityId:id,status:"FAILED",method:"POST",path:key,module:"Admissions",reason:"Admission not found"});return json({error:"Admission not found"},404);} const a=p.admissions![0]; const bed=beds.find(x=>x.number===a.bed.number); if(bed)bed.status="CLEANING"; p.admissions=[]; const e=recordAudit({action:"DISCHARGE",entity:"Admission",entityId:id,status:"SUCCESS",method:"POST",path:key,module:"Admissions",after:{patientId:p.id,bedStatus:"CLEANING"}}); return json({id,status:"DISCHARGED",requestId:e.requestId,auditId:e.id},200); }
+  if(key.match(/^\/admissions\/[^/]+\/transfer$/)) { const id=key.split("/")[2]; const b=await req.json(); const p=patients.find(x=>x.admissions?.some(a=>a.id===id)); const to=beds.find(x=>x.id===b.toBedId); if(!p||!to){recordAudit({action:"TRANSFER",entity:"Admission",entityId:id,status:"FAILED",method:"POST",path:key,module:"Admissions",reason:"Admission or destination bed not found"});return json({error:"Admission or destination bed not found"},404);} if(to.status!=="AVAILABLE"){recordAudit({action:"TRANSFER",entity:"Admission",entityId:id,status:"FAILED",method:"POST",path:key,module:"Admissions",reason:"Destination bed is not available"});return json({error:"Destination bed is not available"},409);} const old=p.admissions![0]; const oldBed=beds.find(x=>x.number===old.bed.number); if(oldBed)oldBed.status="CLEANING"; to.status="OCCUPIED"; old.bed={number:to.number,ward:{name:to.ward.name},room:to.room}; const e=recordAudit({action:"TRANSFER",entity:"Admission",entityId:id,status:"SUCCESS",method:"POST",path:key,module:"Admissions",after:{toBedId:to.id,toBed:to.number}}); return json({id,status:"TRANSFERRED",bed:to,requestId:e.requestId,auditId:e.id},200); }
+  const entity=key.split("/")[1]||"System";
+  const event=recordAudit({action:key==="/auth/login"?"LOGIN":"REQUEST",entity,entityId:key.split("/")[2],status:"SUCCESS",method:"POST",path:key,module:entity});
+  return json({ok:true,id:event.id,requestId:event.requestId,status:"SUCCESS"},201);
+}
+export async function PATCH(req:NextRequest,{params}:{params:Promise<{path:string[]}>}) {
+  const {path}=await params; const key="/"+path.join("/"); const body=await req.json().catch(()=>({}));
+  const entity=key.split("/")[1]||"System"; const entityId=key.split("/")[2];
+  const event=recordAudit({action:"UPDATE",entity,entityId,status:"SUCCESS",method:"PATCH",path:key,module:entity,after:body});
+  return json({ok:true,id:entityId,updated:true,requestId:event.requestId,status:"SUCCESS",data:body});
+}
+export async function DELETE(req:NextRequest,{params}:{params:Promise<{path:string[]}>}) {
+  const {path}=await params; const key="/"+path.join("/"); const entity=key.split("/")[1]||"System"; const entityId=key.split("/")[2];
+  const event=recordAudit({action:"DELETE",entity,entityId,status:"SUCCESS",method:"DELETE",path:key,module:entity});
+  return json({ok:true,id:entityId,deleted:true,requestId:event.requestId,status:"SUCCESS"});
 }
