@@ -1,6 +1,6 @@
 "use client";
 import { useEffect,useMemo,useState } from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"";
 const modules=["Patients","Admissions","Beds","Appointments","Clinical","Nursing","Diagnostics","Pharmacy","Billing","Insurance","Inventory","Emergency","Operations","Care","Reports","Audit"];
 const routes:Record<string,string>={Operations:"/operations",Care:"/care",Clinical:"/clinical",Nursing:"/nursing",Diagnostics:"/diagnostics",Pharmacy:"/pharmacy",Insurance:"/insurance",Inventory:"/inventory",Reports:"/reports",Audit:"/audit",Admissions:"/admissions",Beds:"/admin"};
 type Patient={id:string;mrn:string;firstName:string;lastName:string;phone?:string;email?:string;admissions?:{id:string;bed:{number:string;ward:{name:string};room?:{number:string}}}[]};
