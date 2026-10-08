@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"";
 export default function Audit(){const[data,setData]=useState<any[]>([]);const[error,setError]=useState("");
 async function load(){try{const r=await fetch(API+"/api/v1/audit?limit=200");if(!r.ok)throw new Error("Audit API unavailable");setData((await r.json()).data||[])}catch(e){setError(e instanceof Error?e.message:"Could not load audit trail")}}
 useEffect(()=>{load()},[]);
