@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:4000";
+const API=process.env.NEXT_PUBLIC_API_URL||"";
 type Item={id:string;sku:string;name:string;category?:string;unit:string;quantity:number;reorderLevel:number};
 export default function Inventory(){const [items,setItems]=useState<Item[]>([]),[sku,setSku]=useState(""),[name,setName]=useState(""),[qty,setQty]=useState("0"),[reorder,setReorder]=useState("5"),[message,setMessage]=useState("");
 const load=async()=>{const r=await fetch(`${API}/api/v1/inventory/items`);const x=await r.json();setItems(x.data||[])};useEffect(()=>{void load()},[]);
