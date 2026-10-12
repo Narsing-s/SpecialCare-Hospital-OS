@@ -61,6 +61,8 @@ jobs:
             echo "Checking $endpoint"
             curl -fsS -H "Cookie: sc_session=$SESSION_COOKIE" "http://127.0.0.1:4000$endpoint" >/dev/null
           done
+          echo "Checking web sign-in page"
+          curl -fsS http://127.0.0.1:3000/login >/dev/null
 
       - name: Show logs on failure
         if: failure()
