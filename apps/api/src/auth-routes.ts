@@ -27,7 +27,7 @@ export async function registerAuthRoutes(app:FastifyInstance,prisma:PrismaClient
   });
   app.get("/api/v1/auth/me",async(request,reply)=>{
     const auth=request.headers.authorization;
-    const cookie=request.headers.cookie?.match(/(?:^|;\\s*)sc_session=([^;]+)/)?.[1];
+    const cookie=request.headers.cookie?.match(/(?:^|;\s*)sc_session=([^;]+)/)?.[1];
     const payload=verifyToken(auth?.startsWith("Bearer ")?auth.slice(7):cookie||"");if(!payload?.sub)return reply.code(401).send({error:"Invalid or expired session"});
     const user=await prisma.user.findUnique({where:{id:String(payload.sub)},include:{roles:{include:{role:{include:{permissions:{include:{permission:true}}}}}},hospital:true}});
     if(!user||user.status!=="ACTIVE")return reply.code(401).send({error:"User account is not active"});
