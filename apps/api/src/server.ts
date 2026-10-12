@@ -35,7 +35,7 @@ app.addHook("onRequest", async (request, reply) => {
   const path=request.url.split("?")[0];
   if (!path.startsWith("/api/v1/") || path==="/api/v1/auth/login" || request.method==="OPTIONS") return;
   const header=request.headers.authorization;
-  const cookie=request.headers.cookie?.match(/(?:^|;\\s*)sc_session=([^;]+)/)?.[1];
+  const cookie=request.headers.cookie?.match(/(?:^|;\s*)sc_session=([^;]+)/)?.[1];
   const user=verifyToken(header?.startsWith("Bearer ")?header.slice(7):cookie||"");
   if (!user?.sub) return reply.code(401).send({error:"Invalid or expired session",code:"SESSION_EXPIRED"});
   const permissions=Array.isArray(user.permissions)?user.permissions.map(String):[];
