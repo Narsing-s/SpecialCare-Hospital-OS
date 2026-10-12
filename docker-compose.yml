@@ -29,6 +29,7 @@ services:
       PORT: 4000
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-change-this-password}@postgres:5432/specialcare
       AUTH_SECRET: ${AUTH_SECRET:-change-this-auth-secret}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-SET_SEED_ADMIN_PASSWORD}
     ports:
       - "4000:4000"
     healthcheck:
