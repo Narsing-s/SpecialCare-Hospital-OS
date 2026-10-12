@@ -28,7 +28,9 @@ services:
       NODE_ENV: production
       PORT: 4000
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/specialcare
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the host environment}
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in the host environment}
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN in the host environment}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?Set SEED_ADMIN_PASSWORD in the host environment}
     ports:
       - "4000:4000"
     healthcheck:
