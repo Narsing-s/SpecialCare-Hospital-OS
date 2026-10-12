@@ -59,73 +59,35 @@ Next.js + TypeScript frontend, Fastify + TypeScript API, PostgreSQL + Prisma, ob
 
 Prisma migrations are committed under `packages/database/prisma/migrations`. The database includes hospital operations plus insurance/TPA, notifications, nursing assignments/tasks, care plans and audit/reporting foundations with indexes and foreign keys. Run Prisma validation/migrations after pulling the latest changes. Demo seed data includes a 5,120-bed facility hierarchy plus non-production blood-bank and ambulance records.
 
-## Development
+## Run as an app (no Docker required)
+
+**Use it on your phone:** open the deployed web app in Chrome, open the browser menu, and choose **Add to Home screen** or **Install app**. It then launches from your home screen like an app. The existing UI is unchanged.
+
+**Hosted demo:** the Vercel deployment is linked from the repository's GitHub Actions/deployment status once the first deployment completes.
+
+**Run locally if you have a computer (optional):** Node.js 20+ is enough for the web demo. The demo API is included in the Next.js app, so Docker and PostgreSQL are not required for the demo mode.
 
 ```bash
+git clone https://github.com/Narsing-s/SpecialCare-Hospital-OS.git
+cd SpecialCare-Hospital-OS
 npm install
-npm run db:generate
-npm run db:migrate
-npm run db:seed
 npm run dev
-npm run dev:api
 ```
 
-> Clinical workflows, privacy/security controls and regulatory requirements must be validated by qualified healthcare, legal and security professionals before real-world deployment. The demo seed data and disabled demo clinician account are for development only.
+Then open `http://localhost:3000`.
 
+This repository also contains a separate Fastify/PostgreSQL backend and Prisma schema for development. That database-backed backend is not required for the hosted demo UI. The demo API uses sample data and is not a persistent, multi-user hospital database. Do not enter real patient, clinical, insurance, or payment data.
 
-## Run locally (recommended: Docker Compose)
+### Mobile installation
 
-This starts the database, API, and the existing web UI together. No UI redesign is involved.
+1. Open the hosted app URL in Chrome on Android.
+2. Tap the three-dot menu.
+3. Select **Install app** or **Add to Home screen**.
+4. Launch **SpecialCare** from the new home-screen icon.
 
-**Requirements:** Git and Docker Desktop with Docker Compose enabled.
+The web app includes a service worker for app-shell and previously fetched GET-response caching. Offline use is limited to content already cached on that device; the full application is not guaranteed to work offline.
 
-### Windows PowerShell
-
-```powershell
-git clone https://github.com/Narsing-s/SpecialCare-Hospital-OS.git
-cd SpecialCare-Hospital-OS
-Copy-Item .env.example .env
-docker compose up --build -d
-docker compose ps
-Invoke-RestMethod http://localhost:4000/health
-```
-
-### macOS / Linux
-
-```bash
-git clone https://github.com/Narsing-s/SpecialCare-Hospital-OS.git
-cd SpecialCare-Hospital-OS
-cp .env.example .env
-docker compose up --build -d
-docker compose ps
-curl http://localhost:4000/health
-```
-
-When the `web` and `api` containers are healthy, open **http://localhost:3000**. The API health endpoint is **http://localhost:4000/health**.
-
-**Local demo sign-in**
-
-- Email: `demo.clinician@specialcare.local`
-- Password: the value of `SEED_ADMIN_PASSWORD` in your local `.env` file (default: `LocalDemoPassword123!`)
-
-These credentials and all seeded data are for local development only. Change them before any shared deployment.
-
-### Useful local commands
-
-```bash
-docker compose logs -f api
-docker compose logs -f web
-docker compose restart api web
-docker compose down
-```
-
-`docker compose down` keeps the database volume. To completely reset the local demo database, use `docker compose down -v` (this permanently deletes its local data).
-
-If a port is already in use, stop the other process or change the published ports in `docker-compose.yml`. If a build fails, inspect `docker compose logs --no-color` and the relevant GitHub Actions run.
-
-### Run the services directly with Node.js (optional)
-
-Install Node.js 20+, PostgreSQL 17, and dependencies with `npm install`. Configure `DATABASE_URL`, `AUTH_SECRET`, `SEED_ADMIN_PASSWORD`, and `CORS_ORIGIN=http://localhost:3000` in your shell before running the database setup and API. Copy `apps/web/.env.example` to `apps/web/.env.local` so Next.js uses `NEXT_PUBLIC_API_URL=http://localhost:4000`. Start the API with `npm run dev:api` and the web UI with `npm run dev` in separate terminals.
+> Clinical workflows, privacy/security controls and regulatory requirements must be validated by qualified healthcare, legal and security professionals before real-world deployment. Demo data is for demonstration only.
 
 ## Production-readiness status
 
