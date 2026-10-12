@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "SpecialCare Hospital OS",
+  "short_name": "SpecialCare",
+  "description": "SpecialCare hospital command center",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#081a2d",
+  "theme_color": "#12314b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
