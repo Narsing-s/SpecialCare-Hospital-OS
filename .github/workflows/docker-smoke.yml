@@ -12,6 +12,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Start API and PostgreSQL
+        env:
+          POSTGRES_PASSWORD: smoke-postgres-password
+          AUTH_SECRET: smoke-test-auth-secret-change-this-value
+          SEED_ADMIN_PASSWORD: smoke-test-password-12345
         run: docker compose up -d --build
 
       - name: Wait for API
@@ -26,25 +30,37 @@ jobs:
           exit 1
 
       - name: Smoke test database-backed API
+        env:
+          SEED_ADMIN_PASSWORD: smoke-test-password-12345
         run: |
-          set -e
+          set -euo pipefail
           curl -fsS http://127.0.0.1:4000/health
-          curl -fsS http://127.0.0.1:4000/api/v1/hospitals
-          curl -fsS http://127.0.0.1:4000/api/v1/hierarchy
-          curl -fsS http://127.0.0.1:4000/api/v1/dashboard/summary
-          curl -fsS http://127.0.0.1:4000/api/v1/patients
-          curl -fsS http://127.0.0.1:4000/api/v1/admissions
-          curl -fsS http://127.0.0.1:4000/api/v1/appointments
-          curl -fsS http://127.0.0.1:4000/api/v1/doctors
-          curl -fsS http://127.0.0.1:4000/api/v1/diagnostics/orders
-          curl -fsS http://127.0.0.1:4000/api/v1/prescriptions
-          curl -fsS http://127.0.0.1:4000/api/v1/inventory/items
-          curl -fsS http://127.0.0.1:4000/api/v1/operations/summary
-          curl -fsS http://127.0.0.1:4000/api/v1/emergency
-          curl -fsS http://127.0.0.1:4000/api/v1/icu
-          curl -fsS http://127.0.0.1:4000/api/v1/ot
-          curl -fsS http://127.0.0.1:4000/api/v1/blood-bank
-          curl -fsS http://127.0.0.1:4000/api/v1/ambulances
+          curl -fsS -D /tmp/specialcare-login.headers -o /tmp/specialcare-login.json \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"demo.clinician@specialcare.local","password":"smoke-test-password-12345"}' \
+            http://127.0.0.1:4000/api/v1/auth/login
+          SESSION_COOKIE="$(grep -i '^set-cookie:' /tmp/specialcare-login.headers | sed -E 's/^[^:]+: sc_session=([^;]+).*/\1/I' | tr -d '\r')"
+          test -n "$SESSION_COOKIE"
+          for endpoint in \
+            /api/v1/hospitals \
+            /api/v1/hierarchy \
+            /api/v1/dashboard/summary \
+            /api/v1/patients \
+            /api/v1/admissions \
+            /api/v1/appointments \
+            /api/v1/doctors \
+            /api/v1/diagnostics/orders \
+            /api/v1/prescriptions \
+            /api/v1/inventory/items \
+            /api/v1/operations/summary \
+            /api/v1/emergency \
+            /api/v1/icu \
+            /api/v1/ot \
+            /api/v1/blood-bank \
+            /api/v1/ambulances; do
+            echo "Checking $endpoint"
+            curl -fsS -H "Cookie: sc_session=$SESSION_COOKIE" "http://127.0.0.1:4000$endpoint" >/dev/null
+          done
 
       - name: Show logs on failure
         if: failure()
