@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: specialcare
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-specialcare-password}
     ports:
       - "5432:5432"
     volumes:
@@ -25,11 +25,12 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 4000
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-change-this-password}@postgres:5432/specialcare
-      AUTH_SECRET: ${AUTH_SECRET:-change-this-auth-secret}
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-SET_SEED_ADMIN_PASSWORD}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-local-specialcare-password}@postgres:5432/specialcare
+      AUTH_SECRET: ${AUTH_SECRET:-local-specialcare-auth-secret-change-me}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-LocalDemoPassword123!}
     ports:
       - "4000:4000"
     healthcheck:
@@ -37,6 +38,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
       start_period: 30s
 
 volumes:
