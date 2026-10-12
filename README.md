@@ -73,21 +73,59 @@ npm run dev:api
 > Clinical workflows, privacy/security controls and regulatory requirements must be validated by qualified healthcare, legal and security professionals before real-world deployment. The demo seed data and disabled demo clinician account are for development only.
 
 
-## Local startup (fixes localhost:4000 connection errors)
+## Run locally (recommended: Docker Compose)
 
-The browser frontend expects the API at `http://localhost:4000`. The frontend alone does **not** start the API.
+This starts the database, API, and the existing web UI together. No UI redesign is involved.
 
-1. Start PostgreSQL:
-   `docker compose up -d postgres`
-2. Configure the API environment with `DATABASE_URL=postgresql://postgres:change-this-password@localhost:5432/specialcare`, `AUTH_SECRET=change-this-to-a-long-random-secret`, and `CORS_ORIGIN=http://localhost:3000`.
-3. In terminal 1 run: `npm run db:setup`
-4. In terminal 1 run: `npm run dev:api`
-5. In terminal 2 run: `npm run dev`
-6. Open `http://localhost:3000` and sign in with the demo account created by the seed (using the password supplied through `SEED_ADMIN_PASSWORD`).
+**Requirements:** Git and Docker Desktop with Docker Compose enabled.
 
-Check `http://localhost:4000/health` before opening the web app. If Chrome reports `ERR_CONNECTION_REFUSED` for port 4000, the API process is not running or is not listening on that port.
+### Windows PowerShell
 
-For Docker, set `POSTGRES_PASSWORD`, `AUTH_SECRET`, and `CORS_ORIGIN` in the environment before starting the API container. Do not use the compose development defaults in a real environment.
+```powershell
+git clone https://github.com/Narsing-s/SpecialCare-Hospital-OS.git
+cd SpecialCare-Hospital-OS
+Copy-Item .env.example .env
+docker compose up --build -d
+docker compose ps
+Invoke-RestMethod http://localhost:4000/health
+```
+
+### macOS / Linux
+
+```bash
+git clone https://github.com/Narsing-s/SpecialCare-Hospital-OS.git
+cd SpecialCare-Hospital-OS
+cp .env.example .env
+docker compose up --build -d
+docker compose ps
+curl http://localhost:4000/health
+```
+
+When the `web` and `api` containers are healthy, open **http://localhost:3000**. The API health endpoint is **http://localhost:4000/health**.
+
+**Local demo sign-in**
+
+- Email: `demo.clinician@specialcare.local`
+- Password: the value of `SEED_ADMIN_PASSWORD` in your local `.env` file (default: `LocalDemoPassword123!`)
+
+These credentials and all seeded data are for local development only. Change them before any shared deployment.
+
+### Useful local commands
+
+```bash
+docker compose logs -f api
+docker compose logs -f web
+docker compose restart api web
+docker compose down
+```
+
+`docker compose down` keeps the database volume. To completely reset the local demo database, use `docker compose down -v` (this permanently deletes its local data).
+
+If a port is already in use, stop the other process or change the published ports in `docker-compose.yml`. If a build fails, inspect `docker compose logs --no-color` and the relevant GitHub Actions run.
+
+### Run the services directly with Node.js (optional)
+
+Install Node.js 20+, PostgreSQL 17, and dependencies with `npm install`. Configure `DATABASE_URL`, `AUTH_SECRET`, `SEED_ADMIN_PASSWORD`, and `CORS_ORIGIN=http://localhost:3000` in your shell before running the database setup and API. Copy `apps/web/.env.example` to `apps/web/.env.local` so Next.js uses `NEXT_PUBLIC_API_URL=http://localhost:4000`. Start the API with `npm run dev:api` and the web UI with `npm run dev` in separate terminals.
 
 ## Production-readiness status
 
